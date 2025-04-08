@@ -13,11 +13,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+// Add Pusher import
+import Pusher from "pusher-js";
 
 interface SessionData {
   username: string;
   email: string;
   isLoggedIn: boolean;
+  id: string;
 }
 
 export function MDNavbar() {
@@ -25,6 +28,8 @@ export function MDNavbar() {
   const router = useRouter();
   const [session, setSession] = useState<SessionData | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // Add unread message count state
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
   useEffect(() => {
     // Fetch session data when component mounts
@@ -42,6 +47,54 @@ export function MDNavbar() {
 
     fetchSession();
   }, []);
+
+  // Add useEffect for unread message counts
+  useEffect(() => {
+    // Only set up Pusher if we have a session
+    if (!session?.id) return;
+
+    // Fetch initial unread message count
+    const fetchUnreadCount = async () => {
+      try {
+        const response = await fetch(
+          "/api/unread-messages?userId=" + session.id
+        );
+        if (response.ok) {
+          const unreadCountsData = await response.json();
+          // Sum up all unread counts
+          const totalUnread = unreadCountsData.reduce(
+            (total: any, { count }: any) => total + count,
+            0
+          );
+          setUnreadMessageCount(totalUnread);
+        }
+      } catch (error) {
+        console.error("Failed to fetch unread counts:", error);
+      }
+    };
+
+    fetchUnreadCount();
+
+    // Set up Pusher for real-time notifications
+    const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
+      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
+      authEndpoint: "/api/pusher/auth",
+    });
+
+    const channel = pusher.subscribe(`private-user-${session.id}`);
+    channel.bind("new-message", () => {
+      // Increment unread count when a new message arrives
+      setUnreadMessageCount((prev) => prev + 1);
+    });
+
+    // Set up an interval to refresh unread counts
+    const intervalId = setInterval(fetchUnreadCount, 30000); // every 30 seconds
+
+    return () => {
+      pusher.unsubscribe(`private-user-${session.id}`);
+      clearInterval(intervalId);
+    };
+  }, [session]);
 
   const handleLogout = async () => {
     try {
@@ -61,6 +114,12 @@ export function MDNavbar() {
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
+  };
+
+  // Add function to handle chat click and reset unread count
+  const handleChatClick = () => {
+    setUnreadMessageCount(0);
+    closeMenu();
   };
 
   const closeMenu = () => {
@@ -118,8 +177,16 @@ export function MDNavbar() {
                       : ""
                   }
                 `}
+                onClick={item.href === "/MD/chat" ? handleChatClick : undefined}
               >
-                {item.label}
+                <div className="flex items-center">
+                  {item.label}
+                  {item.href === "/MD/chat" && unreadMessageCount > 0 && (
+                    <div className="ml-2 bg-green-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                      {unreadMessageCount > 9 ? "9+" : unreadMessageCount}
+                    </div>
+                  )}
+                </div>
               </Link>
             ))}
           </div>
@@ -193,9 +260,18 @@ export function MDNavbar() {
                         : ""
                     }
                   `}
-                  onClick={closeMenu}
+                  onClick={
+                    item.href === "/MD/chat" ? handleChatClick : closeMenu
+                  }
                 >
-                  {item.label}
+                  <div className="flex items-center justify-between">
+                    <span>{item.label}</span>
+                    {item.href === "/MD/chat" && unreadMessageCount > 0 && (
+                      <div className="ml-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                        {unreadMessageCount > 9 ? "9+" : unreadMessageCount}
+                      </div>
+                    )}
+                  </div>
                 </Link>
               ))}
 
