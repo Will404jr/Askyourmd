@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Plus, Image, Search } from "lucide-react";
+import { Send, Search } from "lucide-react";
 import Pusher from "pusher-js";
 import { type User, users } from "@/lib/user";
 import { useRouter } from "next/navigation";
@@ -48,7 +48,7 @@ const ChatInterface = () => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [scrollToBottom]);
+  }, [scrollToBottom, messages]);
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -83,24 +83,31 @@ const ChatInterface = () => {
         );
         if (response.ok) {
           const fetchedMessages = await response.json();
-          setMessages((prevMessages) => ({
-            ...prevMessages,
-            [selectedContact.id]: fetchedMessages.map((msg: any) => ({
-              id: msg._id,
-              sender:
-                msg.senderId === currentUser.id
-                  ? currentUser.username
-                  : selectedContact.username,
-              content: msg.message,
-              timestamp: new Date(msg.timestamp).toLocaleTimeString(),
-              isSent: msg.senderId === currentUser.id,
-            })),
-          }));
+          setMessages((prevMessages) => {
+            const updatedMessages = {
+              ...prevMessages,
+              [selectedContact.id]: fetchedMessages.map((msg: any) => ({
+                id: msg._id,
+                sender:
+                  msg.senderId === currentUser.id
+                    ? currentUser.username
+                    : selectedContact.username,
+                content: msg.message,
+                timestamp: new Date(msg.timestamp).toLocaleTimeString(),
+                isSent: msg.senderId === currentUser.id,
+              })),
+            };
+
+            // Schedule a scroll to bottom after state update
+            setTimeout(scrollToBottom, 0);
+
+            return updatedMessages;
+          });
         }
       }
     };
     fetchMessages();
-  }, [currentUser, selectedContact]);
+  }, [currentUser, selectedContact, scrollToBottom]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -112,19 +119,26 @@ const ChatInterface = () => {
 
     const channel = pusher.subscribe(`private-user-${currentUser.id}`);
     channel.bind("new-message", (data: { sender: User; message: string }) => {
-      setMessages((prevMessages) => ({
-        ...prevMessages,
-        [data.sender.id]: [
-          ...(prevMessages[data.sender.id] || []),
-          {
-            id: Date.now(),
-            sender: data.sender.username,
-            content: data.message,
-            timestamp: new Date().toLocaleTimeString(),
-            isSent: false,
-          },
-        ],
-      }));
+      setMessages((prevMessages) => {
+        const updatedMessages = {
+          ...prevMessages,
+          [data.sender.id]: [
+            ...(prevMessages[data.sender.id] || []),
+            {
+              id: Date.now(),
+              sender: data.sender.username,
+              content: data.message,
+              timestamp: new Date().toLocaleTimeString(),
+              isSent: false,
+            },
+          ],
+        };
+
+        // Schedule a scroll to bottom after state update
+        setTimeout(scrollToBottom, 0);
+
+        return updatedMessages;
+      });
 
       // Update unread count for the sender
       setUnreadCounts((prevCounts) => ({
@@ -136,7 +150,7 @@ const ChatInterface = () => {
     return () => {
       pusher.unsubscribe(`private-user-${currentUser.id}`);
     };
-  }, [currentUser]);
+  }, [currentUser, scrollToBottom]);
 
   useEffect(() => {
     const fetchUnreadCounts = async () => {
@@ -194,19 +208,26 @@ const ChatInterface = () => {
           throw new Error("Failed to send message");
         }
 
-        setMessages((prevMessages) => ({
-          ...prevMessages,
-          [selectedContact.id]: [
-            ...(prevMessages[selectedContact.id] || []),
-            {
-              id: Date.now(),
-              sender: currentUser.username,
-              content: message,
-              timestamp: new Date().toLocaleTimeString(),
-              isSent: true,
-            },
-          ],
-        }));
+        setMessages((prevMessages) => {
+          const updatedMessages = {
+            ...prevMessages,
+            [selectedContact.id]: [
+              ...(prevMessages[selectedContact.id] || []),
+              {
+                id: Date.now(),
+                sender: currentUser.username,
+                content: message,
+                timestamp: new Date().toLocaleTimeString(),
+                isSent: true,
+              },
+            ],
+          };
+
+          // Schedule a scroll to bottom after state update
+          setTimeout(scrollToBottom, 0);
+
+          return updatedMessages;
+        });
 
         setMessage("");
       } catch (error) {

@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Plus, Image, Search, Users, X, ArrowLeft } from "lucide-react";
+import { Send, Search, Users, X, ArrowLeft } from "lucide-react";
 import Pusher from "pusher-js";
 import { type User, users } from "@/lib/user";
 import { useRouter } from "next/navigation";
@@ -13,6 +13,13 @@ import { useRouter } from "next/navigation";
 interface UnreadCount {
   _id: string;
   count: number;
+}
+
+interface MessagePreview {
+  content: string;
+  timestamp: string; // Formatted time for display
+  rawTimestamp: Date; // Raw timestamp for sorting
+  isRead: boolean;
 }
 
 const ChatInterface = () => {
@@ -31,9 +38,13 @@ const ChatInterface = () => {
       isSent: boolean;
     }>;
   }>({});
+  const [messagePreviews, setMessagePreviews] = useState<{
+    [key: string]: MessagePreview;
+  }>({});
   const [unreadCounts, setUnreadCounts] = useState<{ [key: string]: number }>(
     {}
   );
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const router = useRouter();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -85,6 +96,52 @@ const ChatInterface = () => {
     fetchSession();
   }, [router]);
 
+  // Fetch last message for all contacts on initial load
+  useEffect(() => {
+    const fetchAllLastMessages = async () => {
+      if (!currentUser || currentUser.personnelType !== "Md" || !isInitialLoad)
+        return;
+
+      const staffUsers = users.filter(
+        (user) => user.id !== currentUser.id && user.personnelType === "Staff"
+      );
+
+      const previews: { [key: string]: MessagePreview } = {};
+
+      // Fetch last message for each staff user
+      for (const staffUser of staffUsers) {
+        try {
+          const response = await fetch(
+            `/api/get-last-message?userId=${currentUser.id}&otherUserId=${staffUser.id}`
+          );
+
+          if (response.ok) {
+            const lastMessage = await response.json();
+
+            if (lastMessage) {
+              previews[staffUser.id] = {
+                content: lastMessage.message,
+                timestamp: new Date(lastMessage.timestamp).toLocaleTimeString(),
+                rawTimestamp: new Date(lastMessage.timestamp),
+                isRead: true,
+              };
+            }
+          }
+        } catch (error) {
+          console.error(
+            `Error fetching last message for ${staffUser.username}:`,
+            error
+          );
+        }
+      }
+
+      setMessagePreviews((prev) => ({ ...prev, ...previews }));
+      setIsInitialLoad(false);
+    };
+
+    fetchAllLastMessages();
+  }, [currentUser, isInitialLoad]);
+
   useEffect(() => {
     if (currentUser?.personnelType === "Staff") {
       const md = users.find((user) => user.personnelType === "Md");
@@ -94,6 +151,25 @@ const ChatInterface = () => {
     }
   }, [currentUser]);
 
+  // Update message previews when messages change
+  useEffect(() => {
+    const newPreviews: { [key: string]: MessagePreview } = {};
+
+    Object.entries(messages).forEach(([contactId, contactMessages]) => {
+      if (contactMessages.length > 0) {
+        const lastMessage = contactMessages[contactMessages.length - 1];
+        newPreviews[contactId] = {
+          content: lastMessage.content,
+          timestamp: lastMessage.timestamp,
+          rawTimestamp: new Date(), // This should be the timestamp of the last message
+          isRead: unreadCounts[contactId] === 0,
+        };
+      }
+    });
+
+    setMessagePreviews((prev) => ({ ...prev, ...newPreviews }));
+  }, [messages, unreadCounts]);
+
   useEffect(() => {
     const fetchMessages = async () => {
       if (currentUser && selectedContact) {
@@ -102,19 +178,37 @@ const ChatInterface = () => {
         );
         if (response.ok) {
           const fetchedMessages = await response.json();
-          setMessages((prevMessages) => ({
-            ...prevMessages,
-            [selectedContact.id]: fetchedMessages.map((msg: any) => ({
-              id: msg._id,
-              sender:
-                msg.senderId === currentUser.id
-                  ? currentUser.username
-                  : selectedContact.username,
-              content: msg.message,
-              timestamp: new Date(msg.timestamp).toLocaleTimeString(),
-              isSent: msg.senderId === currentUser.id,
-            })),
-          }));
+          setMessages((prevMessages) => {
+            const updatedMessages = {
+              ...prevMessages,
+              [selectedContact.id]: fetchedMessages.map((msg: any) => ({
+                id: msg._id,
+                sender:
+                  msg.senderId === currentUser.id
+                    ? currentUser.username
+                    : selectedContact.username,
+                content: msg.message,
+                timestamp: new Date(msg.timestamp).toLocaleTimeString(),
+                isSent: msg.senderId === currentUser.id,
+              })),
+            };
+
+            // Update message previews
+            if (fetchedMessages.length > 0) {
+              const lastMsg = fetchedMessages[fetchedMessages.length - 1];
+              setMessagePreviews((prev) => ({
+                ...prev,
+                [selectedContact.id]: {
+                  content: lastMsg.message,
+                  timestamp: new Date(lastMsg.timestamp).toLocaleTimeString(),
+                  rawTimestamp: new Date(lastMsg.timestamp),
+                  isRead: true,
+                },
+              }));
+            }
+
+            return updatedMessages;
+          });
         }
       }
     };
@@ -131,19 +225,36 @@ const ChatInterface = () => {
 
     const channel = pusher.subscribe(`private-user-${currentUser.id}`);
     channel.bind("new-message", (data: { sender: User; message: string }) => {
-      setMessages((prevMessages) => ({
-        ...prevMessages,
-        [data.sender.id]: [
-          ...(prevMessages[data.sender.id] || []),
-          {
-            id: Date.now(),
-            sender: data.sender.username,
+      setMessages((prevMessages) => {
+        const newMessage = {
+          id: Date.now(),
+          sender: data.sender.username,
+          content: data.message,
+          timestamp: new Date().toLocaleTimeString(),
+          isSent: false,
+        };
+
+        const updatedMessages = {
+          ...prevMessages,
+          [data.sender.id]: [
+            ...(prevMessages[data.sender.id] || []),
+            newMessage,
+          ],
+        };
+
+        // Update message preview for this contact
+        setMessagePreviews((prev) => ({
+          ...prev,
+          [data.sender.id]: {
             content: data.message,
             timestamp: new Date().toLocaleTimeString(),
-            isSent: false,
+            rawTimestamp: new Date(),
+            isRead: false,
           },
-        ],
-      }));
+        }));
+
+        return updatedMessages;
+      });
 
       // Update unread count for the sender
       setUnreadCounts((prevCounts) => ({
@@ -184,12 +295,21 @@ const ChatInterface = () => {
     return () => clearInterval(intervalId);
   }, [currentUser]);
 
-  const filteredContacts = users.filter(
-    (user) =>
-      user.id !== currentUser?.id &&
-      user.personnelType === "Staff" &&
-      user.username.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredContacts = users
+    .filter(
+      (user) =>
+        user.id !== currentUser?.id &&
+        user.personnelType === "Staff" &&
+        user.username.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => {
+      // Sort by message timestamp (newest first)
+      const timestampA = messagePreviews[a.id]?.rawTimestamp || new Date(0);
+      const timestampB = messagePreviews[b.id]?.rawTimestamp || new Date(0);
+
+      // Compare the actual Date objects
+      return timestampB.getTime() - timestampA.getTime();
+    });
 
   const handleSend = async () => {
     if (message.trim() && selectedContact && currentUser) {
@@ -213,18 +333,31 @@ const ChatInterface = () => {
           throw new Error("Failed to send message");
         }
 
+        const newMessageObj = {
+          id: Date.now(),
+          sender: currentUser.username,
+          content: message,
+          timestamp: new Date().toLocaleTimeString(),
+          isSent: true,
+        };
+
         setMessages((prevMessages) => ({
           ...prevMessages,
           [selectedContact.id]: [
             ...(prevMessages[selectedContact.id] || []),
-            {
-              id: Date.now(),
-              sender: currentUser.username,
-              content: message,
-              timestamp: new Date().toLocaleTimeString(),
-              isSent: true,
-            },
+            newMessageObj,
           ],
+        }));
+
+        // Update message preview
+        setMessagePreviews((prev) => ({
+          ...prev,
+          [selectedContact.id]: {
+            content: message,
+            timestamp: new Date().toLocaleTimeString(),
+            rawTimestamp: new Date(),
+            isRead: true,
+          },
         }));
 
         setMessage("");
@@ -236,6 +369,29 @@ const ChatInterface = () => {
 
   const handleContactSelect = (contact: User) => {
     setSelectedContact(contact);
+
+    // Mark messages as read when selecting a contact
+    if (unreadCounts[contact.id] > 0) {
+      setUnreadCounts((prev) => ({
+        ...prev,
+        [contact.id]: 0,
+      }));
+
+      // Update message preview to mark as read
+      if (messagePreviews[contact.id]) {
+        setMessagePreviews((prev) => ({
+          ...prev,
+          [contact.id]: {
+            ...prev[contact.id],
+            isRead: true,
+            rawTimestamp: prev[contact.id].rawTimestamp,
+            content: prev[contact.id].content,
+            timestamp: prev[contact.id].timestamp,
+          },
+        }));
+      }
+    }
+
     if (isMobile) {
       setShowSidebar(false);
     }
@@ -247,6 +403,12 @@ const ChatInterface = () => {
 
   const getTotalUnread = () => {
     return Object.values(unreadCounts).reduce((sum, count) => sum + count, 0);
+  };
+
+  // Function to truncate message preview
+  const truncateMessage = (text: string, maxLength = 30) => {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + "...";
   };
 
   return (
@@ -315,8 +477,19 @@ const ChatInterface = () => {
                             <h3 className="font-semibold truncate">
                               {contact.username}
                             </h3>
-                            <p className="text-sm text-gray-500 truncate">
-                              {contact.email}
+                            <p
+                              className={`text-sm truncate ${
+                                messagePreviews[contact.id] &&
+                                !messagePreviews[contact.id].isRead
+                                  ? "text-gray-900 font-medium"
+                                  : "text-gray-500"
+                              }`}
+                            >
+                              {messagePreviews[contact.id]
+                                ? truncateMessage(
+                                    messagePreviews[contact.id].content
+                                  )
+                                : ""}
                             </p>
                           </div>
                           {unreadCounts[contact.id] > 0 && (

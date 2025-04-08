@@ -10,69 +10,21 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import dynamic from "next/dynamic";
 
-// Create a wrapper component for the chart to handle dynamic imports
-const Chart = dynamic(
-  () =>
-    import("recharts").then((mod) => {
-      const {
-        BarChart,
-        Bar,
-        XAxis,
-        CartesianGrid,
-        Tooltip,
-        Legend,
-        ResponsiveContainer,
-      } = mod;
-
-      return function Chart({ data }: { data: MonthlyData[] }) {
-        return (
-          <div className="h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={data}
-                margin={{
-                  top: 20,
-                  right: 30,
-                  left: 0,
-                  bottom: 60,
-                }}
-              >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis
-                  dataKey="monthLabel"
-                  angle={-45}
-                  textAnchor="end"
-                  height={60}
-                  interval={0}
-                  tick={{
-                    fill: "#6b7280",
-                    fontSize: 12,
-                  }}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend />
-                <Bar
-                  name="Total Issues"
-                  dataKey="totalIssues"
-                  fill="#3b82f6"
-                  barSize={20}
-                />
-                <Bar
-                  name="Closed Issues"
-                  dataKey="closedIssues"
-                  fill="#22c55e"
-                  barSize={20}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        );
-      };
-    }),
-  { ssr: false }
-);
+// Import shadcn/ui chart components
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Issue {
   _id: string;
@@ -115,8 +67,9 @@ const LoadingCard = () => (
 
 const LoadingChart = () => (
   <Card>
-    <CardHeader>
+    <CardHeader className="flex flex-row items-center justify-between">
       <Skeleton className="h-6 w-[150px]" />
+      <Skeleton className="h-10 w-[120px]" />
     </CardHeader>
     <CardContent>
       <Skeleton className="h-[400px] w-full" />
@@ -145,6 +98,27 @@ export default function AnalysisPage() {
   const [monthlyData, setMonthlyData] = React.useState<MonthlyData[]>([]);
   const [loading, setLoading] = React.useState(true);
 
+  const [selectedYear, setSelectedYear] = React.useState<string>(
+    new Date().getFullYear().toString()
+  );
+  const [availableYears, setAvailableYears] = React.useState<string[]>([]);
+  const [filteredData, setFilteredData] = React.useState<MonthlyData[]>([]);
+
+  // Handle year selection change
+  const handleYearChange = (year: string) => {
+    setSelectedYear(year);
+    filterDataByYear(year);
+  };
+
+  // Filter data by selected year
+  const filterDataByYear = (year: string) => {
+    const filtered = monthlyData.filter((item) => {
+      const [itemYear] = item.month.split("-");
+      return itemYear === year;
+    });
+    setFilteredData(filtered);
+  };
+
   React.useEffect(() => {
     const fetchIssues = async () => {
       try {
@@ -154,6 +128,25 @@ export default function AnalysisPage() {
 
         const monthlyIssues = processMonthlyData(data);
         setMonthlyData(monthlyIssues);
+
+        // Extract available years from the data
+        const years = [
+          ...new Set(monthlyIssues.map((item) => item.month.split("-")[0])),
+        ];
+        setAvailableYears(years);
+
+        // Set current year as default if available, otherwise use the most recent year
+        const currentYear = new Date().getFullYear().toString();
+        const defaultYear = years.includes(currentYear)
+          ? currentYear
+          : years[years.length - 1];
+        setSelectedYear(defaultYear);
+
+        // Filter data for the default year
+        const filtered = monthlyIssues.filter(
+          (item) => item.month.split("-")[0] === defaultYear
+        );
+        setFilteredData(filtered);
       } catch (error) {
         console.error("Error fetching issues:", error);
       } finally {
@@ -181,6 +174,7 @@ export default function AnalysisPage() {
       "Dec",
     ];
 
+    // First, collect data from issues
     data.forEach((issue) => {
       const date = new Date(issue.createdAt);
       const monthKey = `${date.getFullYear()}-${String(
@@ -196,17 +190,29 @@ export default function AnalysisPage() {
       }
     });
 
-    return Object.entries(months)
-      .map(([month, counts]) => {
-        const [year, monthNum] = month.split("-");
-        return {
-          month: month,
-          monthLabel: `${monthNames[parseInt(monthNum) - 1]} ${year}`,
-          totalIssues: counts.total,
-          closedIssues: counts.closed,
-        };
-      })
-      .sort((a, b) => a.month.localeCompare(b.month));
+    // Get all unique years from the data
+    const years = [
+      ...new Set(Object.keys(months).map((key) => key.split("-")[0])),
+    ];
+
+    // Create a complete dataset with all months for each year
+    const completeData: MonthlyData[] = [];
+
+    years.forEach((year) => {
+      monthNames.forEach((month, index) => {
+        const monthNum = String(index + 1).padStart(2, "0");
+        const monthKey = `${year}-${monthNum}`;
+
+        completeData.push({
+          month: monthKey,
+          monthLabel: `${month} ${year}`,
+          totalIssues: months[monthKey]?.total || 0,
+          closedIssues: months[monthKey]?.closed || 0,
+        });
+      });
+    });
+
+    return completeData.sort((a, b) => a.month.localeCompare(b.month));
   };
 
   const statusCounts = {
@@ -290,11 +296,71 @@ export default function AnalysisPage() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Issue Trends</CardTitle>
+          {availableYears.length > 1 && (
+            <Select value={selectedYear} onValueChange={handleYearChange}>
+              <SelectTrigger className="w-[120px]">
+                <SelectValue placeholder="Select Year" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableYears.map((year) => (
+                  <SelectItem key={year} value={year}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </CardHeader>
         <CardContent>
-          <Chart data={monthlyData} />
+          <ChartContainer
+            config={{
+              totalIssues: {
+                label: "Total Issues",
+                color: "#3b82f6", // Original blue color
+              },
+              closedIssues: {
+                label: "Closed Issues",
+                color: "#22c55e", // Original green color
+              },
+            }}
+            className="min-h-[400px]"
+          >
+            <BarChart
+              accessibilityLayer
+              data={filteredData}
+              margin={{
+                top: 20,
+                right: 30,
+                left: 0,
+                bottom: 60,
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis
+                dataKey="monthLabel"
+                angle={-45}
+                textAnchor="end"
+                height={60}
+                interval={0}
+                tick={{
+                  fill: "#6b7280",
+                  fontSize: 12,
+                }}
+              />
+              <YAxis />
+              <Bar dataKey="totalIssues" fill="#3b82f6" radius={4} />
+              <Bar dataKey="closedIssues" fill="#22c55e" radius={4} />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    formatter={(value) => `${value} Issues`}
+                  />
+                }
+              />
+            </BarChart>
+          </ChartContainer>
         </CardContent>
       </Card>
     </div>
