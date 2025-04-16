@@ -7,8 +7,24 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Search, Users, X, ArrowLeft } from "lucide-react";
 import Pusher from "pusher-js";
-import { type User, users } from "@/lib/user";
 import { useRouter } from "next/navigation";
+
+// Define user interfaces based on the new structure
+interface AdminUser {
+  id: string;
+  username: string;
+  email: string;
+  personnelType: "Md";
+}
+
+interface StaffUser {
+  id: string; // This will be the uid from LDAP
+  username: string; // This will be the cn from LDAP
+  email: string; // This will be the mail from LDAP
+  personnelType: "Staff";
+}
+
+type User = AdminUser | StaffUser;
 
 interface UnreadCount {
   _id: string;
@@ -27,6 +43,7 @@ const ChatInterface = () => {
   const [selectedContact, setSelectedContact] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
   const [showSidebar, setShowSidebar] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [messages, setMessages] = useState<{
@@ -80,15 +97,20 @@ const ChatInterface = () => {
     scrollToBottom();
   }, [scrollToBottom, messages]);
 
+  // Fetch current user session
   useEffect(() => {
     const fetchSession = async () => {
       const response = await fetch("/api/session");
       const session = await response.json();
       if (session.isLoggedIn && session.username) {
-        const user = users.find((u) => u.username === session.username);
-        if (user) {
-          setCurrentUser(user);
-        }
+        // Create user object from session data
+        const user: User = {
+          id: session.id,
+          username: session.username,
+          email: session.email,
+          personnelType: session.personnelType,
+        };
+        setCurrentUser(user);
       } else {
         router.push("/login");
       }
@@ -96,15 +118,42 @@ const ChatInterface = () => {
     fetchSession();
   }, [router]);
 
+  // Fetch staff users from LDAP
+  useEffect(() => {
+    const fetchStaffUsers = async () => {
+      if (currentUser?.personnelType === "Md") {
+        try {
+          const response = await fetch("/api/users");
+          if (response.ok) {
+            const ldapUsers = await response.json();
+            // Map LDAP users to our StaffUser interface
+            const mappedUsers: StaffUser[] = ldapUsers.map((user: any) => ({
+              id: user.uid,
+              username: user.cn,
+              email: user.mail || `${user.uid}@example.com`,
+              personnelType: "Staff",
+            }));
+            setStaffUsers(mappedUsers);
+          }
+        } catch (error) {
+          console.error("Error fetching staff users:", error);
+        }
+      }
+    };
+
+    fetchStaffUsers();
+  }, [currentUser]);
+
   // Fetch last message for all contacts on initial load
   useEffect(() => {
     const fetchAllLastMessages = async () => {
-      if (!currentUser || currentUser.personnelType !== "Md" || !isInitialLoad)
+      if (
+        !currentUser ||
+        currentUser.personnelType !== "Md" ||
+        !isInitialLoad ||
+        staffUsers.length === 0
+      )
         return;
-
-      const staffUsers = users.filter(
-        (user) => user.id !== currentUser.id && user.personnelType === "Staff"
-      );
 
       const previews: { [key: string]: MessagePreview } = {};
 
@@ -140,16 +189,7 @@ const ChatInterface = () => {
     };
 
     fetchAllLastMessages();
-  }, [currentUser, isInitialLoad]);
-
-  useEffect(() => {
-    if (currentUser?.personnelType === "Staff") {
-      const md = users.find((user) => user.personnelType === "Md");
-      if (md) {
-        setSelectedContact(md);
-      }
-    }
-  }, [currentUser]);
+  }, [currentUser, isInitialLoad, staffUsers]);
 
   // Update message previews when messages change
   useEffect(() => {
@@ -170,6 +210,7 @@ const ChatInterface = () => {
     setMessagePreviews((prev) => ({ ...prev, ...newPreviews }));
   }, [messages, unreadCounts]);
 
+  // Fetch messages between current user and selected contact
   useEffect(() => {
     const fetchMessages = async () => {
       if (currentUser && selectedContact) {
@@ -215,6 +256,7 @@ const ChatInterface = () => {
     fetchMessages();
   }, [currentUser, selectedContact]);
 
+  // Set up Pusher for real-time messaging
   useEffect(() => {
     if (!currentUser) return;
 
@@ -268,6 +310,7 @@ const ChatInterface = () => {
     };
   }, [currentUser]);
 
+  // Fetch unread message counts
   useEffect(() => {
     const fetchUnreadCounts = async () => {
       if (currentUser && currentUser.personnelType === "Md") {
@@ -295,11 +338,10 @@ const ChatInterface = () => {
     return () => clearInterval(intervalId);
   }, [currentUser]);
 
-  const filteredContacts = users
+  const filteredContacts = staffUsers
     .filter(
       (user) =>
         user.id !== currentUser?.id &&
-        user.personnelType === "Staff" &&
         user.username.toLowerCase().includes(searchQuery.toLowerCase())
     )
     .sort((a, b) => {

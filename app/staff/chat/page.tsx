@@ -5,10 +5,26 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Search } from "lucide-react";
+import { Send } from "lucide-react";
 import Pusher from "pusher-js";
-import { type User, users } from "@/lib/user";
 import { useRouter } from "next/navigation";
+
+// Define user interfaces based on the new structure
+interface AdminUser {
+  id: string;
+  username: string;
+  email: string;
+  personnelType: "Md";
+}
+
+interface StaffUser {
+  id: string; // This will be the uid from LDAP
+  username: string; // This will be the cn from LDAP
+  email: string; // This will be the mail from LDAP
+  personnelType: "Staff";
+}
+
+type User = AdminUser | StaffUser;
 
 interface UnreadCount {
   _id: string;
@@ -20,6 +36,7 @@ const ChatInterface = () => {
   const [selectedContact, setSelectedContact] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [messages, setMessages] = useState<{
     [key: string]: Array<{
       id: number;
@@ -50,15 +67,20 @@ const ChatInterface = () => {
     scrollToBottom();
   }, [scrollToBottom, messages]);
 
+  // Fetch current user session
   useEffect(() => {
     const fetchSession = async () => {
       const response = await fetch("/api/session");
       const session = await response.json();
       if (session.isLoggedIn && session.username) {
-        const user = users.find((u) => u.username === session.username);
-        if (user) {
-          setCurrentUser(user);
-        }
+        // Create user object from session data
+        const user: User = {
+          id: session.id,
+          username: session.username,
+          email: session.email,
+          personnelType: session.personnelType,
+        };
+        setCurrentUser(user);
       } else {
         router.push("/login");
       }
@@ -66,15 +88,36 @@ const ChatInterface = () => {
     fetchSession();
   }, [router]);
 
+  // Fetch admin user (MD)
   useEffect(() => {
-    if (currentUser?.personnelType === "Staff") {
-      const md = users.find((user) => user.personnelType === "Md");
-      if (md) {
-        setSelectedContact(md);
+    const fetchAdminUser = async () => {
+      try {
+        const response = await fetch("/api/admin-user");
+        if (response.ok) {
+          const admin = await response.json();
+          setAdminUser({
+            id: admin.id,
+            username: admin.username,
+            email: admin.email,
+            personnelType: "Md",
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching admin user:", error);
       }
-    }
-  }, [currentUser]);
+    };
 
+    fetchAdminUser();
+  }, []);
+
+  // Set MD as the selected contact for staff users
+  useEffect(() => {
+    if (currentUser?.personnelType === "Staff" && adminUser) {
+      setSelectedContact(adminUser);
+    }
+  }, [currentUser, adminUser]);
+
+  // Fetch messages between current user and selected contact
   useEffect(() => {
     const fetchMessages = async () => {
       if (currentUser && selectedContact) {
@@ -109,6 +152,7 @@ const ChatInterface = () => {
     fetchMessages();
   }, [currentUser, selectedContact, scrollToBottom]);
 
+  // Set up Pusher for real-time messaging
   useEffect(() => {
     if (!currentUser) return;
 
@@ -152,6 +196,7 @@ const ChatInterface = () => {
     };
   }, [currentUser, scrollToBottom]);
 
+  // Fetch unread message counts
   useEffect(() => {
     const fetchUnreadCounts = async () => {
       if (currentUser && currentUser.personnelType === "Md") {
@@ -178,13 +223,6 @@ const ChatInterface = () => {
 
     return () => clearInterval(intervalId);
   }, [currentUser]);
-
-  const filteredContacts = users.filter(
-    (user) =>
-      user.id !== currentUser?.id &&
-      user.personnelType === "Staff" &&
-      user.username.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   const handleSend = async () => {
     if (message.trim() && selectedContact && currentUser) {
@@ -240,59 +278,6 @@ const ChatInterface = () => {
     <main className="container mx-auto px-4 py-2">
       <div className="max-w-6xl mx-auto p-6">
         <Card className="h-[600px] flex bg-white shadow-lg">
-          {currentUser?.personnelType === "Md" && (
-            <div className="w-80 border-r flex flex-col">
-              <div className="p-4 border-b">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    placeholder="Search contacts..."
-                    className="pl-9"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <ScrollArea className="flex-1">
-                <div className="h-full">
-                  <div className="divide-y">
-                    {filteredContacts.map((contact) => (
-                      <div
-                        key={contact.id}
-                        className={`p-4 hover:bg-gray-50 cursor-pointer ${
-                          selectedContact?.id === contact.id ? "bg-gray-50" : ""
-                        }`}
-                        onClick={() => setSelectedContact(contact)}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                            <span className="text-blue-600 font-semibold">
-                              {contact.username.substring(0, 2).toUpperCase()}
-                            </span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold truncate">
-                              {contact.username}
-                            </h3>
-                            <p className="text-sm text-gray-500 truncate">
-                              {contact.email}
-                            </p>
-                          </div>
-                          {unreadCounts[contact.id] > 0 && (
-                            <div className="bg-green-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
-                              {unreadCounts[contact.id]}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </ScrollArea>
-            </div>
-          )}
-
           <div className="flex-1 flex flex-col rounded-lg">
             {selectedContact && (
               <div className="p-4 border-b flex items-center gap-3 bg-white rounded-lg">

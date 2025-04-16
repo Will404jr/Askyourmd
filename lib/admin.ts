@@ -1,13 +1,6 @@
-export interface User {
-  id: string;
-  username: string;
-  email: string;
-  personnelType: "Md" | "Staff";
-}
-
-export const users: User[] = [
+export const users = [
   {
-    id: "U001",
+    id: "admin",
     username: "Admin",
     email: "admin@nssfug.org",
     personnelType: "Md",

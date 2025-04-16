@@ -38,20 +38,28 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Command, CommandInput, CommandList, CommandItem } from "cmdk";
 import { MoreVertical, UserPlus, CheckCircle, Info, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { users } from "@/lib/user";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 
-interface User {
+// Define user interfaces based on the new structure
+interface AdminUser {
   id: string;
   username: string;
   email: string;
-  personnelType: string;
+  personnelType: "Md";
 }
+
+interface StaffUser {
+  id: string; // This will be the uid from LDAP
+  username: string; // This will be the cn from LDAP
+  email: string; // This will be the mail from LDAP
+  personnelType: "Staff";
+}
+
+type User = AdminUser | StaffUser;
 
 interface Issue {
   _id: string;
@@ -77,6 +85,7 @@ export default function EnhancedIssuesTable() {
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = React.useState(false);
   const [userSearchQuery, setUserSearchQuery] = React.useState("");
+  const [staffUsers, setStaffUsers] = React.useState<User[]>([]);
   const itemsPerPage = 10;
   const [isResolveDialogOpen, setIsResolveDialogOpen] = React.useState(false);
   const [resolveComment, setResolveComment] = React.useState("");
@@ -101,6 +110,30 @@ export default function EnhancedIssuesTable() {
       }
     };
     fetchData();
+  }, []);
+
+  // Fetch staff users from LDAP
+  React.useEffect(() => {
+    const fetchStaffUsers = async () => {
+      try {
+        const response = await fetch("/api/users");
+        if (response.ok) {
+          const ldapUsers = await response.json();
+          // Map LDAP users to our StaffUser interface
+          const mappedUsers: StaffUser[] = ldapUsers.map((user: any) => ({
+            id: user.uid,
+            username: user.cn,
+            email: user.mail || `${user.uid}@example.com`,
+            personnelType: "Staff",
+          }));
+          setStaffUsers(mappedUsers);
+        }
+      } catch (error) {
+        console.error("Error fetching staff users:", error);
+      }
+    };
+
+    fetchStaffUsers();
   }, []);
 
   // Filter issues based on search query and status
@@ -132,9 +165,12 @@ export default function EnhancedIssuesTable() {
   const assignedIssues = issues.filter((issue) => issue.assignedTo).length;
 
   // Filter users based on search
-  const filteredUsers = users.filter((user) =>
+  const filteredUsers = staffUsers.filter((user) =>
     user.username.toLowerCase().includes(userSearchQuery.toLowerCase())
   );
+
+  // Check if current user is an admin
+  const isAdmin = session?.personnelType === "Md";
 
   // Handle issue assignment
   const handleAssign = async (issueId: string, username: string) => {
@@ -229,6 +265,12 @@ export default function EnhancedIssuesTable() {
     if (!selectedIssue) return;
 
     try {
+      // If admin is resolving the issue, assign it to "Admin"
+      const assignedTo =
+        isAdmin && !selectedIssue.assignedTo
+          ? "Admin"
+          : selectedIssue.assignedTo;
+
       const response = await fetch(`/api/issues/${selectedIssue._id}`, {
         method: "PUT",
         headers: {
@@ -237,6 +279,7 @@ export default function EnhancedIssuesTable() {
         body: JSON.stringify({
           status: "Closed",
           reslvedComment: resolveComment,
+          assignedTo: assignedTo,
         }),
       });
 
@@ -255,6 +298,17 @@ export default function EnhancedIssuesTable() {
     } catch (error) {
       console.error("Error resolving issue:", error);
     }
+  };
+
+  // Check if an issue can be resolved by the current user
+  const canResolveIssue = (issue: Issue) => {
+    // Admin can resolve any open issue
+    if (isAdmin && issue.status !== "Closed") {
+      return true;
+    }
+
+    // Staff can only resolve issues assigned to them
+    return session?.username === issue.assignedTo && issue.status !== "Closed";
   };
 
   return (
@@ -403,15 +457,14 @@ export default function EnhancedIssuesTable() {
                         <CheckCircle className="mr-2 h-4 w-4" />
                         {issue.approved ? "Approved" : "Approve"}
                       </DropdownMenuItem>
-                      {session?.username === issue.assignedTo &&
-                        issue.status !== "Closed" && (
-                          <DropdownMenuItem
-                            onClick={() => openResolveDialog(issue)}
-                          >
-                            <CheckCircle className="mr-2 h-4 w-4" />
-                            Resolve
-                          </DropdownMenuItem>
-                        )}
+                      {canResolveIssue(issue) && (
+                        <DropdownMenuItem
+                          onClick={() => openResolveDialog(issue)}
+                        >
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                          Resolve
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
@@ -537,50 +590,59 @@ export default function EnhancedIssuesTable() {
             <DialogHeader>
               <DialogTitle>Assign Issue</DialogTitle>
             </DialogHeader>
-            <Command>
-              <CommandInput
+            <div className="space-y-4">
+              <Input
                 placeholder="Search users..."
                 value={userSearchQuery}
-                onValueChange={setUserSearchQuery}
-                className="border-none focus:ring-0"
+                onChange={(e) => setUserSearchQuery(e.target.value)}
+                className="w-full"
               />
-              <CommandList className="max-h-[300px] overflow-y-auto">
-                {filteredUsers.map((user) => (
-                  <CommandItem
-                    key={user.id}
-                    onSelect={() => {
-                      if (selectedIssue) {
-                        handleAssign(selectedIssue._id, user.username);
-                      }
-                    }}
-                    className="flex items-center px-4 py-3 cursor-pointer transition-colors hover:bg-gray-100 active:bg-gray-200 rounded-md group"
+              <div className="max-h-[300px] overflow-y-auto border rounded-md">
+                {filteredUsers.length === 0 ? (
+                  <div
+                    key="no-users-found"
+                    className="p-4 text-center text-gray-500"
                   >
-                    <div className="flex items-center space-x-3 w-full">
-                      <div className="flex-shrink-0">
-                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                          <span className="text-blue-600 font-semibold text-sm">
-                            {user.username.slice(0, 2).toUpperCase()}
-                          </span>
+                    No users found
+                  </div>
+                ) : (
+                  filteredUsers.map((user) => (
+                    <div
+                      key={user.id}
+                      onClick={() => {
+                        if (selectedIssue) {
+                          handleAssign(selectedIssue._id, user.username);
+                        }
+                      }}
+                      className="flex items-center px-4 py-3 cursor-pointer transition-colors hover:bg-gray-100 active:bg-gray-200 border-b last:border-b-0"
+                    >
+                      <div className="flex items-center space-x-3 w-full">
+                        <div className="flex-shrink-0">
+                          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                            <span className="text-blue-600 font-semibold text-sm">
+                              {user.username.slice(0, 2).toUpperCase()}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-600">
-                            {user.username}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium text-gray-900 truncate hover:text-blue-600">
+                              {user.username}
+                            </p>
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                              {user.personnelType}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-500 truncate">
+                            {user.email}
                           </p>
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                            {user.personnelType}
-                          </span>
                         </div>
-                        <p className="text-sm text-gray-500 truncate">
-                          {user.email}
-                        </p>
                       </div>
                     </div>
-                  </CommandItem>
-                ))}
-              </CommandList>
-            </Command>
+                  ))
+                )}
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
 
@@ -601,6 +663,14 @@ export default function EnhancedIssuesTable() {
                 onChange={(e) => setResolveComment(e.target.value)}
                 rows={4}
               />
+              {isAdmin && !selectedIssue?.assignedTo && (
+                <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded-md">
+                  <p>
+                    This issue is currently unassigned. When you resolve it, it
+                    will be assigned to "Admin".
+                  </p>
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button
@@ -624,8 +694,9 @@ export default function EnhancedIssuesTable() {
                 )}
               />
             </PaginationItem>
-            {[...Array(totalPages)].map((_, i) => (
-              <PaginationItem key={i + 1}>
+            {/* Add key prop to each pagination item */}
+            {Array.from({ length: totalPages }).map((_, i) => (
+              <PaginationItem key={`page-${i + 1}`}>
                 <PaginationLink
                   onClick={() => setCurrentPage(i + 1)}
                   isActive={currentPage === i + 1}

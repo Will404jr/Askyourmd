@@ -8,9 +8,11 @@ import Marketing from "@/public/imgs/marketing.jpeg";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 
 const LoginPage = () => {
   const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const router = useRouter();
 
   const handleLogin = async () => {
@@ -20,7 +22,7 @@ const LoginPage = () => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username }),
+        body: JSON.stringify({ username, password }),
       });
 
       if (response.ok) {
@@ -31,8 +33,8 @@ const LoginPage = () => {
           router.push("/staff/home");
         }
       } else {
-        console.error("Login failed");
-        // You might want to show an error message to the user here
+        // console.error("Login failed");
+        toast.error("Invalid credentials. Please try again.");
       }
     } catch (error) {
       console.error("Error during login:", error);
@@ -72,6 +74,13 @@ const LoginPage = () => {
                 placeholder="Username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                className="bg-white"
+              />
+              <Input
+                type="password" // Password input
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="bg-white"
               />
               <Button
