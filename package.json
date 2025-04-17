@@ -29,6 +29,7 @@
     "iron-session": "^8.0.4",
     "js-cookie": "^3.0.5",
     "ldapjs": "^3.0.7",
+    "ldapts": "^7.4.0",
     "lucide-react": "^0.474.0",
     "mongoose": "^8.9.7",
     "next": "15.1.6",

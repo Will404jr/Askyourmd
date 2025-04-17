@@ -195,12 +195,12 @@ export function StaffNavbar() {
 
           {/* Profile Menu - Right (Desktop) */}
           <div className="hidden md:flex items-center space-x-2">
-            <Link
+            {/* <Link
               href="/staff/notifications"
               className="p-2 rounded-full text-white hover:bg-white/10 transition-all"
             >
               <Bell className="h-5 w-5" />
-            </Link>
+            </Link> */}
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

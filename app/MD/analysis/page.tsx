@@ -325,7 +325,7 @@ export default function AnalysisPage() {
                 color: "#22c55e", // Original green color
               },
             }}
-            className="min-h-[400px]"
+            className="min-h-[300px]"
           >
             <BarChart
               accessibilityLayer

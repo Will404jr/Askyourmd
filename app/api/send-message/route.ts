@@ -4,7 +4,6 @@ import { getSession } from "@/lib/session";
 import dbConnect from "@/lib/db";
 import { Message } from "@/lib/models/Message";
 import { users as adminUsers } from "@/lib/admin";
-import ldapjs from "ldapjs";
 
 // Define user interfaces
 interface AdminUser {
@@ -23,13 +22,8 @@ interface StaffUser {
 
 type User = AdminUser | StaffUser | null;
 
-// LDAP configuration for Forum Systems test server
-const ldapConfig = {
-  url: "ldap://ldap.forumsys.com:389",
-  baseDN: "dc=example,dc=com",
-  bindDN: "cn=read-only-admin,dc=example,dc=com",
-  bindPassword: "password",
-};
+// Flask API configuration
+const FLASK_USERS_URL = "http://localhost:5000/users"; // Update to your Flask server URL
 
 const pusher = new Pusher({
   appId: process.env.PUSHER_APP_ID!,
@@ -52,73 +46,31 @@ async function getUserById(userId: string): Promise<User> {
     };
   }
 
-  // If not admin, check LDAP for staff users
-  return new Promise<User>((resolve, reject) => {
-    const client = ldapjs.createClient({
-      url: ldapConfig.url,
-    });
+  // If not admin, fetch users from Flask API
+  try {
+    const response = await fetch(FLASK_USERS_URL);
+    if (!response.ok) {
+      throw new Error(`Flask API responded with status ${response.status}`);
+    }
+    const users: { uid: string; mail?: string; cn: string }[] =
+      await response.json();
 
-    client.on("error", (err) => {
-      client.unbind();
-      reject(err);
-    });
+    // Find user by uid (used as id)
+    const user = users.find((u) => u.uid === userId);
+    if (!user) {
+      return null;
+    }
 
-    // Bind with service account to search for user
-    client.bind(ldapConfig.bindDN, ldapConfig.bindPassword, (err) => {
-      if (err) {
-        client.unbind();
-        return reject(err);
-      }
-
-      // Search for user by uid (which we use as id)
-      const searchOptions = {
-        scope: "sub" as const,
-        filter: `(uid=${userId})`,
-        attributes: ["uid", "mail", "cn"],
-      };
-
-      client.search(ldapConfig.baseDN, searchOptions, (err, res) => {
-        if (err) {
-          client.unbind();
-          return reject(err);
-        }
-
-        let userData: StaffUser | null = null;
-
-        res.on("searchEntry", (entry) => {
-          // Extract attributes correctly from the LDAP entry
-          const attributes = entry.pojo.attributes;
-
-          const uid = attributes.find((attr: any) => attr.type === "uid")
-            ?.values[0];
-          const mail = attributes.find((attr: any) => attr.type === "mail")
-            ?.values[0];
-          const cn = attributes.find((attr: any) => attr.type === "cn")
-            ?.values[0];
-
-          if (uid) {
-            // Create a properly structured user object
-            userData = {
-              id: uid,
-              email: mail || `${uid}@example.com`,
-              username: cn || uid,
-              personnelType: "Staff",
-            };
-          }
-        });
-
-        res.on("end", () => {
-          client.unbind();
-          resolve(userData);
-        });
-
-        res.on("error", (err) => {
-          client.unbind();
-          reject(err);
-        });
-      });
-    });
-  });
+    return {
+      id: user.uid,
+      username: user.cn || user.uid, // Use cn as username, fallback to uid
+      email: user.mail || `${user.uid}@example.com`, // Fallback email
+      personnelType: "Staff",
+    };
+  } catch (error) {
+    console.error("Error fetching user from Flask API:", error);
+    return null;
+  }
 }
 
 export async function POST(req: Request) {

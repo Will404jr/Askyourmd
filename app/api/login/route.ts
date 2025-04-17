@@ -2,105 +2,39 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { type User as AdminUser, users as adminUsers } from "@/lib/adminlogin";
 import { type User as StaffUser } from "@/lib/user";
-import ldapjs from "ldapjs";
 
-// LDAP configuration for Forum Systems test server
-const ldapConfig = {
-  url: "ldap://54.80.223.88:389", // Use LDAP for testing
-  baseDN: "dc=example,dc=com",
-  bindDN: "cn=read-only-admin,dc=example,dc=com", // Service account for searching
-  bindPassword: "password",
-};
+// Flask API configuration
+const FLASK_API_URL = "http://localhost:5000/auth"; // Update to your Flask server URL
 
 async function authenticateLDAP(
   username: string,
   password: string
 ): Promise<StaffUser | null> {
-  return new Promise((resolve, reject) => {
-    const client = ldapjs.createClient({
-      url: ldapConfig.url,
+  try {
+    const response = await fetch(FLASK_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ username, password }),
     });
 
-    client.on("error", (err) => {
-      reject(err);
-    });
-
-    // Bind with service account to search for user
-    client.bind(ldapConfig.bindDN, ldapConfig.bindPassword, (err) => {
-      if (err) {
-        client.unbind();
-        return reject(err);
-      }
-
-      // Search for user by uid
-      const searchOptions = {
-        scope: "sub" as "sub",
-        filter: `(uid=${username})`,
-        attributes: ["uid", "mail", "cn"],
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        id: data.id,
+        username: data.username,
+        email: data.email,
+        personnelType: data.personnelType,
       };
-
-      client.search(ldapConfig.baseDN, searchOptions, (err, res) => {
-        if (err) {
-          client.unbind();
-          return reject(err);
-        }
-
-        let userData: any = null;
-
-        res.on("searchEntry", (entry) => {
-          // Extract attributes correctly from the LDAP entry
-          const attributes = entry.pojo.attributes;
-
-          // Create a properly structured user object
-          userData = {
-            uid:
-              attributes.find((attr: any) => attr.type === "uid")?.values[0] ||
-              "",
-            mail:
-              attributes.find((attr: any) => attr.type === "mail")?.values[0] ||
-              "",
-            cn:
-              attributes.find((attr: any) => attr.type === "cn")?.values[0] ||
-              "",
-          };
-
-          console.log("LDAP user data:", userData); // Debug log
-        });
-
-        res.on("end", async () => {
-          if (!userData) {
-            client.unbind();
-            return resolve(null);
-          }
-
-          // Verify password by binding with user credentials
-          const userDN = `uid=${username},dc=example,dc=com`;
-          const userClient = ldapjs.createClient({ url: ldapConfig.url });
-
-          userClient.bind(userDN, password, (err) => {
-            client.unbind();
-            userClient.unbind();
-
-            if (err) {
-              return resolve(null);
-            }
-
-            resolve({
-              id: userData.uid, // Use uid as id
-              username: userData.cn, // Use cn as username
-              email: userData.mail || `${username}@example.com`, // Fallback email
-              personnelType: "Staff",
-            });
-          });
-        });
-
-        res.on("error", (err) => {
-          client.unbind();
-          reject(err);
-        });
-      });
-    });
-  });
+    } else {
+      console.error("Flask auth error:", await response.text());
+      return null;
+    }
+  } catch (error) {
+    console.error("Error calling Flask API:", error);
+    return null;
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -135,7 +69,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Try LDAP authentication for staff
+  // Try LDAP authentication via Flask for staff
   try {
     const staffUser = await authenticateLDAP(username, password);
 
@@ -170,7 +104,7 @@ export async function POST(req: NextRequest) {
       );
     }
   } catch (error) {
-    console.error("LDAP authentication error:", error);
+    console.error("Authentication error:", error);
     return NextResponse.json(
       { error: "Authentication failed" },
       { status: 500 }
