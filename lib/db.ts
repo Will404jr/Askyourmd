@@ -1,14 +1,30 @@
 import mongoose from "mongoose";
 
 const MONGODB_URI = "mongodb://localhost:27017/askyourmd";
-// const MONGODB_URI =
-//   "mongodb+srv://Junior:test01@cluster0.46lb860.mongodb.net/Askyourmd?retryWrites=true&w=majority";
+const timeZone = "Africa/Kampala";
 
 if (!MONGODB_URI) {
   throw new Error(
     "Please define the MONGODB_URI environment variable inside .env.local"
   );
 }
+
+// Set Mongoose to convert timestamps to EAT
+mongoose.set("toJSON", {
+  transform: (doc, ret) => {
+    if (ret.createdAt) {
+      ret.createdAt = new Date(ret.createdAt).toLocaleString("en-US", {
+        timeZone,
+      });
+    }
+    if (ret.updatedAt) {
+      ret.updatedAt = new Date(ret.updatedAt).toLocaleString("en-US", {
+        timeZone,
+      });
+    }
+    return ret;
+  },
+});
 
 // Define the type for the cached connection
 type MongooseCache = {
@@ -34,7 +50,7 @@ if (!global.mongoose) {
 
 async function dbConnect(): Promise<typeof mongoose> {
   if (cached.conn) {
-    // console.log("✅ Using existing MongoDB connection");
+    console.log("✅ Using existing MongoDB connection");
     return cached.conn;
   }
 
@@ -50,7 +66,6 @@ async function dbConnect(): Promise<typeof mongoose> {
       .then((mongoose) => {
         console.log("✅ Successfully connected to MongoDB");
 
-        // Add connection event listeners
         mongoose.connection.on("connected", () => {
           console.log("🟢 MongoDB connected");
         });

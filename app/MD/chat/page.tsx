@@ -64,6 +64,7 @@ const ChatInterface = () => {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const router = useRouter();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Check if viewport is mobile size
   useEffect(() => {
@@ -355,6 +356,8 @@ const ChatInterface = () => {
 
   const handleSend = async () => {
     if (message.trim() && selectedContact && currentUser) {
+      setIsLoading(true);
+
       const newMessage = {
         senderId: currentUser.id,
         recipientId: selectedContact.id,
@@ -405,6 +408,8 @@ const ChatInterface = () => {
         setMessage("");
       } catch (error) {
         console.error("Error sending message:", error);
+      } finally {
+        setIsLoading(false);
       }
     }
   };
@@ -627,8 +632,13 @@ const ChatInterface = () => {
                     <Button
                       className="bg-blue-600 hover:bg-blue-700 shrink-0"
                       onClick={handleSend}
+                      disabled={isLoading}
                     >
-                      <Send className="h-5 w-5" />
+                      {isLoading ? (
+                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      ) : (
+                        <Send className="h-5 w-5" />
+                      )}
                     </Button>
                   </div>
                 </div>

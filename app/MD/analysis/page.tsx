@@ -72,7 +72,7 @@ const LoadingChart = () => (
       <Skeleton className="h-10 w-[120px]" />
     </CardHeader>
     <CardContent>
-      <Skeleton className="h-[400px] w-full" />
+      <Skeleton className="h-[600px] w-full" />
     </CardContent>
   </Card>
 );
@@ -313,54 +313,58 @@ export default function AnalysisPage() {
             </Select>
           )}
         </CardHeader>
-        <CardContent>
-          <ChartContainer
-            config={{
-              totalIssues: {
-                label: "Total Issues",
-                color: "#3b82f6", // Original blue color
-              },
-              closedIssues: {
-                label: "Closed Issues",
-                color: "#22c55e", // Original green color
-              },
-            }}
-            className="min-h-[300px]"
-          >
-            <BarChart
-              accessibilityLayer
-              data={filteredData}
-              margin={{
-                top: 20,
-                right: 30,
-                left: 0,
-                bottom: 60,
+        <CardContent className="w-full">
+          <div className="w-full" style={{ height: "500px" }}>
+            <ChartContainer
+              config={{
+                totalIssues: {
+                  label: "Total Issues",
+                  color: "#3b82f6", // Original blue color
+                },
+                closedIssues: {
+                  label: "Closed Issues",
+                  color: "#22c55e", // Original green color
+                },
               }}
+              className="w-full h-full"
             >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis
-                dataKey="monthLabel"
-                angle={-45}
-                textAnchor="end"
-                height={60}
-                interval={0}
-                tick={{
-                  fill: "#6b7280",
-                  fontSize: 12,
+              <BarChart
+                accessibilityLayer
+                data={filteredData}
+                margin={{
+                  top: 20,
+                  right: 30,
+                  left: 0,
+                  bottom: 60,
                 }}
-              />
-              <YAxis />
-              <Bar dataKey="totalIssues" fill="#3b82f6" radius={4} />
-              <Bar dataKey="closedIssues" fill="#22c55e" radius={4} />
-              <ChartTooltip
-                content={
-                  <ChartTooltipContent
-                    formatter={(value) => `${value} Issues`}
-                  />
-                }
-              />
-            </BarChart>
-          </ChartContainer>
+                width={undefined}
+                height={520}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="monthLabel"
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                  interval={0}
+                  tick={{
+                    fill: "#6b7280",
+                    fontSize: 12,
+                  }}
+                />
+                <YAxis />
+                <Bar dataKey="totalIssues" fill="#3b82f6" radius={4} />
+                <Bar dataKey="closedIssues" fill="#22c55e" radius={4} />
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      formatter={(value) => `${value} Issues`}
+                    />
+                  }
+                />
+              </BarChart>
+            </ChartContainer>
+          </div>
         </CardContent>
       </Card>
     </div>
