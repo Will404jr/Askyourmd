@@ -59,7 +59,7 @@ const LoginForm = () => {
 
   const handleSamlLogin = () => {
     // Redirect to SAML login endpoint
-    window.location.href = "https://askyourmd.nssfug.org/api/saml/login";
+    window.location.href = "/api/saml/login";
   };
 
   return (

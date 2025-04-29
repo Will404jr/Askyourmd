@@ -1,5 +1,20 @@
 import { NextResponse } from "next/server";
 import { createSamlStrategy } from "@/lib/saml";
+import { headers } from "next/headers";
+
+// Helper function to get the base URL from request headers
+const getBaseUrlFromRequest = async () => {
+  const headersList = await headers();
+
+  // Check for X-Forwarded-Host and X-Forwarded-Proto headers
+  const host =
+    headersList.get("x-forwarded-host") ||
+    headersList.get("host") ||
+    "askyourmd.nssfug.org";
+  const proto = headersList.get("x-forwarded-proto") || "https";
+
+  return `${proto}://${host}`;
+};
 
 export async function GET() {
   try {
@@ -13,26 +28,25 @@ export async function GET() {
       );
     }
 
+    // Get the base URL from request headers
+    const baseUrl = await getBaseUrlFromRequest();
+
     // Create a custom request object that passport-saml can use
     const req = {
       query: {},
       body: {},
-      url: "https://askyourmd.nssfug.org/api/saml/login",
-      originalUrl: "https://askyourmd.nssfug.org/api/saml/login",
+      url: "/api/saml/login",
+      originalUrl: "/api/saml/login",
       headers: {
-        host: "askyourmd.nssfug.org",
+        host: new URL(baseUrl).host,
       },
-      method: "GET",
-      protocol: "https",
+      protocol: new URL(baseUrl).protocol.replace(":", ""),
     } as any;
 
     try {
       // Use getAuthorizeUrlAsync with all required arguments
-      // 1. RelayState: A string that will be passed back to the callback
-      // 2. host: The hostname of the server
-      // 3. options: Additional options for the authorization request
       const relayState = ""; // Empty string or some state you want to maintain
-      const host = "askyourmd.nssfug.org"; // Your application's hostname
+      const host = new URL(baseUrl).host; // Your application's hostname
       const options = {}; // Additional options if needed
 
       const url = await strategy._saml.getAuthorizeUrlAsync(

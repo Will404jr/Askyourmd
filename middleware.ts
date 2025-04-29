@@ -28,8 +28,16 @@ export async function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get("session");
 
   if (!sessionCookie) {
+    // Get the base URL from request headers
+    const host =
+      request.headers.get("x-forwarded-host") ||
+      request.headers.get("host") ||
+      "askyourmd.nssfug.org";
+    const proto = request.headers.get("x-forwarded-proto") || "https";
+    const baseUrl = `${proto}://${host}`;
+
     // Redirect to login page if no session cookie
-    return NextResponse.redirect(new URL("/", request.url));
+    return NextResponse.redirect(new URL("/", baseUrl));
   }
 
   try {
@@ -38,26 +46,58 @@ export async function middleware(request: NextRequest) {
 
     // Check if the session is expired
     if (session.expiresAt < Date.now()) {
+      // Get the base URL from request headers
+      const host =
+        request.headers.get("x-forwarded-host") ||
+        request.headers.get("host") ||
+        "askyourmd.nssfug.org";
+      const proto = request.headers.get("x-forwarded-proto") || "https";
+      const baseUrl = `${proto}://${host}`;
+
       // Redirect to login page if session is expired
-      return NextResponse.redirect(new URL("/", request.url));
+      return NextResponse.redirect(new URL("/", baseUrl));
     }
 
     // Check if the user is trying to access a protected route
     if (path.startsWith("/MD") && session.personnelType !== "Md") {
+      // Get the base URL from request headers
+      const host =
+        request.headers.get("x-forwarded-host") ||
+        request.headers.get("host") ||
+        "askyourmd.nssfug.org";
+      const proto = request.headers.get("x-forwarded-proto") || "https";
+      const baseUrl = `${proto}://${host}`;
+
       // Redirect to staff home if trying to access MD routes as staff
-      return NextResponse.redirect(new URL("/staff/home", request.url));
+      return NextResponse.redirect(new URL("/staff/home", baseUrl));
     }
 
     if (path.startsWith("/staff") && session.personnelType !== "Staff") {
+      // Get the base URL from request headers
+      const host =
+        request.headers.get("x-forwarded-host") ||
+        request.headers.get("host") ||
+        "askyourmd.nssfug.org";
+      const proto = request.headers.get("x-forwarded-proto") || "https";
+      const baseUrl = `${proto}://${host}`;
+
       // Redirect to MD home if trying to access staff routes as MD
-      return NextResponse.redirect(new URL("/MD/home", request.url));
+      return NextResponse.redirect(new URL("/MD/home", baseUrl));
     }
 
     // Allow access
     return NextResponse.next();
   } catch (error) {
+    // Get the base URL from request headers
+    const host =
+      request.headers.get("x-forwarded-host") ||
+      request.headers.get("host") ||
+      "askyourmd.nssfug.org";
+    const proto = request.headers.get("x-forwarded-proto") || "https";
+    const baseUrl = `${proto}://${host}`;
+
     // Redirect to login page if session is invalid
-    return NextResponse.redirect(new URL("/", request.url));
+    return NextResponse.redirect(new URL("/", baseUrl));
   }
 }
 

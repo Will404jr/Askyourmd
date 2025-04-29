@@ -15,20 +15,34 @@ const getCertificate = () => {
   }
 };
 
+// Helper function to get the base URL
+const getBaseUrl = () => {
+  // In production, use the NEXT_PUBLIC_BASE_URL environment variable if available
+  if (process.env.NEXT_PUBLIC_BASE_URL) {
+    return process.env.NEXT_PUBLIC_BASE_URL;
+  }
+
+  // Default to the production URL
+  return "https://askyourmd.nssfug.org";
+};
+
 // Create SAML strategy
 export const createSamlStrategy = () => {
+  const baseUrl = getBaseUrl();
+
   return new SamlStrategy(
     {
       // Using values from your Azure AD metadata
       entryPoint:
         "https://login.microsoftonline.com/708f7b5b-20fc-4bc8-9150-b1015a308b9c/saml2",
-      issuer: "https://askyourmd.nssfug.org/api/saml/metadata",
-      callbackUrl: "https://askyourmd.nssfug.org/api/saml/callback",
+      issuer: `${baseUrl}/api/saml/metadata`,
+      callbackUrl: `${baseUrl}/api/saml/callback`,
       cert: getCertificate(),
       identifierFormat: null,
       validateInResponseTo: false,
       disableRequestedAuthnContext: true,
       acceptedClockSkewMs: 300000, // 5 minutes
+      // Remove the proxy property as it's not supported
     },
     (profile: any, done: (error: Error | null, user?: any) => void) => {
       // Map SAML profile to user object
