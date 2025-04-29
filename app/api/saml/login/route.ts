@@ -17,8 +17,8 @@ export async function GET() {
     const req = {
       query: {},
       body: {},
-      url: "/api/saml/login",
-      originalUrl: "/api/saml/login",
+      url: "https://askyourmd.nssfug.org/api/saml/login",
+      originalUrl: "https://askyourmd.nssfug.org/api/saml/login",
       headers: {
         host: "askyourmd.nssfug.org",
       },
