@@ -1,51 +1,75 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { getSession } from "./lib/session";
-
-// Paths that don't require authentication
-const publicPaths = ["/", "/login"];
+import { type NextRequest, NextResponse } from "next/server";
 
 export async function middleware(request: NextRequest) {
-  const session = await getSession();
-  const { pathname } = request.nextUrl;
+  // Get the pathname
+  const path = request.nextUrl.pathname;
+
+  // Public paths that don't require authentication
+  const publicPaths = [
+    "/",
+    "/api/login",
+    "/api/saml/login",
+    "/api/saml/callback",
+    "/api/saml/metadata",
+    "/api/saml/logout",
+  ];
 
   // Check if the path is public
   const isPublicPath = publicPaths.some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`)
+    (publicPath) => path === publicPath || path.startsWith(publicPath + "/")
   );
 
-  // If not logged in and trying to access a protected route, redirect to login
-  if (!session.isLoggedIn && !isPublicPath) {
+  // If the path is public, allow access
+  if (isPublicPath) {
+    return NextResponse.next();
+  }
+
+  // Check if the user is authenticated
+  const sessionCookie = request.cookies.get("session");
+
+  if (!sessionCookie) {
+    // Redirect to login page if no session cookie
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  // If logged in and trying to access login page, redirect based on personnelType
-  if (session.isLoggedIn && isPublicPath) {
-    // Determine redirect URL based on personnelType
-    let redirectUrl = "/staff/home"; // Default redirect
+  try {
+    // Parse the session cookie
+    const session = JSON.parse(atob(sessionCookie.value));
 
-    if (session.personnelType === "Md") {
-      redirectUrl = "/MD/home";
-    } else if (session.personnelType === "Staff") {
-      redirectUrl = "/staff/home";
+    // Check if the session is expired
+    if (session.expiresAt < Date.now()) {
+      // Redirect to login page if session is expired
+      return NextResponse.redirect(new URL("/", request.url));
     }
 
-    return NextResponse.redirect(new URL(redirectUrl, request.url));
-  }
+    // Check if the user is trying to access a protected route
+    if (path.startsWith("/MD") && session.personnelType !== "Md") {
+      // Redirect to staff home if trying to access MD routes as staff
+      return NextResponse.redirect(new URL("/staff/home", request.url));
+    }
 
-  return NextResponse.next();
+    if (path.startsWith("/staff") && session.personnelType !== "Staff") {
+      // Redirect to MD home if trying to access staff routes as MD
+      return NextResponse.redirect(new URL("/MD/home", request.url));
+    }
+
+    // Allow access
+    return NextResponse.next();
+  } catch (error) {
+    // Redirect to login page if session is invalid
+    return NextResponse.redirect(new URL("/", request.url));
+  }
 }
 
 export const config = {
   matcher: [
     /*
-     * Match all request paths except:
+     * Match all request paths except for the ones starting with:
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - public folder
-     * - api routes (we'll handle auth in the API routes themselves)
+     * - public files (images, etc.)
      */
-    "/((?!_next/static|_next/image|favicon.ico|imgs|api).*)",
+    "/((?!_next/static|_next/image|favicon.ico|imgs|certs).*)",
   ],
 };

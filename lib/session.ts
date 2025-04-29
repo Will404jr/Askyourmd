@@ -6,6 +6,9 @@ export interface SessionData {
   isLoggedIn: boolean;
   username?: string;
   email?: string;
+  givenName?: string;
+  surname?: string;
+  userPrincipalName?: string;
   personnelType?: string;
   expiresAt?: number; // Add expiration time
   destroy: () => Promise<void>;
