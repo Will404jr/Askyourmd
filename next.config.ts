@@ -5,8 +5,8 @@ const nextConfig = {
   poweredByHeader: false,
   experimental: {
     serverActions: {
-      allowedOrigins: ["*"],
       trustHostHeader: true,
+      allowedOrigins: ["login.microsoftonline.com", "askyourmd.nssfug.org"],
     },
   },
   eslint: {

@@ -4,6 +4,9 @@ export async function middleware(request: NextRequest) {
   // Get the pathname
   const path = request.nextUrl.pathname;
 
+  // Log the request for debugging
+  console.log(`Middleware processing: ${path}`);
+
   // Public paths that don't require authentication
   const publicPaths = [
     "/",
@@ -21,6 +24,7 @@ export async function middleware(request: NextRequest) {
 
   // If the path is public, allow access
   if (isPublicPath) {
+    console.log(`Public path: ${path}, allowing access`);
     return NextResponse.next();
   }
 
@@ -28,6 +32,7 @@ export async function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get("session");
 
   if (!sessionCookie) {
+    console.log(`No session cookie found, redirecting to login`);
     // Get the base URL from request headers
     const host =
       request.headers.get("x-forwarded-host") ||
@@ -43,9 +48,11 @@ export async function middleware(request: NextRequest) {
   try {
     // Parse the session cookie
     const session = JSON.parse(atob(sessionCookie.value));
+    console.log(`Session found for user: ${session.username}`);
 
     // Check if the session is expired
     if (session.expiresAt < Date.now()) {
+      console.log(`Session expired, redirecting to login`);
       // Get the base URL from request headers
       const host =
         request.headers.get("x-forwarded-host") ||
@@ -60,6 +67,9 @@ export async function middleware(request: NextRequest) {
 
     // Check if the user is trying to access a protected route
     if (path.startsWith("/MD") && session.personnelType !== "Md") {
+      console.log(
+        `Staff user trying to access MD route, redirecting to staff home`
+      );
       // Get the base URL from request headers
       const host =
         request.headers.get("x-forwarded-host") ||
@@ -73,6 +83,9 @@ export async function middleware(request: NextRequest) {
     }
 
     if (path.startsWith("/staff") && session.personnelType !== "Staff") {
+      console.log(
+        `MD user trying to access staff route, redirecting to MD home`
+      );
       // Get the base URL from request headers
       const host =
         request.headers.get("x-forwarded-host") ||
@@ -86,8 +99,10 @@ export async function middleware(request: NextRequest) {
     }
 
     // Allow access
+    console.log(`Access granted to ${path}`);
     return NextResponse.next();
   } catch (error) {
+    console.error(`Error processing session:`, error);
     // Get the base URL from request headers
     const host =
       request.headers.get("x-forwarded-host") ||

@@ -19,19 +19,31 @@ const getBaseUrlFromRequest = async () => {
 
 export async function POST(req: NextRequest) {
   try {
+    console.log("SAML callback received");
+
+    // Log headers for debugging
+    const headersList = await headers();
+    console.log("Headers:", Object.fromEntries(headersList.entries()));
+
     const formData = await req.formData();
-    const samlResponse = formData.get("SAMLResponse") as string;
+    const samlResponse = formData.get("SAMLResponse");
+
+    console.log("SAML Response received:", !!samlResponse);
 
     if (!samlResponse) {
-      return NextResponse.json(
-        { error: "No SAML response provided" },
-        { status: 400 }
+      console.error("No SAML response provided");
+      return NextResponse.redirect(
+        new URL("/login?error=no_saml_response", await getBaseUrlFromRequest())
       );
     }
 
     try {
+      // Convert FormDataEntryValue to string
+      const samlResponseString = samlResponse.toString();
+
       // Parse SAML response
-      const profile = await parseSamlResponse(samlResponse);
+      const profile = await parseSamlResponse(samlResponseString);
+      console.log("SAML Profile:", profile);
 
       // Create user object from SAML profile
       const user = {
@@ -57,6 +69,8 @@ export async function POST(req: NextRequest) {
         personnelType: "Staff",
       };
 
+      console.log("User object created:", user);
+
       // Set session
       const session = await getSession();
       session.id = user.id;
@@ -66,6 +80,8 @@ export async function POST(req: NextRequest) {
       session.personnelType = "Staff";
       session.expiresAt = Date.now() + 24 * 60 * 60 * 1000;
       await session.save();
+
+      console.log("Session saved, redirecting to staff home");
 
       // Get the base URL from request headers
       const baseUrl = await getBaseUrlFromRequest();

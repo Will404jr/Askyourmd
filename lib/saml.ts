@@ -42,7 +42,6 @@ export const createSamlStrategy = () => {
       validateInResponseTo: false,
       disableRequestedAuthnContext: true,
       acceptedClockSkewMs: 300000, // 5 minutes
-      // Remove the proxy property as it's not supported
     },
     (profile: any, done: (error: Error | null, user?: any) => void) => {
       // Map SAML profile to user object
@@ -103,16 +102,23 @@ export const parseSamlResponse = (samlResponse: string): Promise<any> => {
       return;
     }
 
-    // Access the internal SAML object to validate the response
-    strategy._saml
-      .validatePostResponseAsync({
-        body: { SAMLResponse: samlResponse },
-      } as any)
-      .then((profile) => {
-        resolve(profile);
-      })
-      .catch((err) => {
-        reject(err);
-      });
+    try {
+      // Access the internal SAML object to validate the response
+      strategy._saml
+        .validatePostResponseAsync({
+          body: { SAMLResponse: samlResponse },
+        } as any)
+        .then((profile) => {
+          console.log("SAML validation successful");
+          resolve(profile);
+        })
+        .catch((err) => {
+          console.error("SAML validation error:", err);
+          reject(err);
+        });
+    } catch (error) {
+      console.error("Error in parseSamlResponse:", error);
+      reject(error);
+    }
   });
 };
