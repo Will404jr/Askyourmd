@@ -33,6 +33,7 @@ export async function middleware(request: NextRequest) {
     "/api/saml/callback",
     "/api/saml/metadata",
     "/api/saml/logout",
+    "/api/check-certificate",
   ];
 
   // Check if the path is public
