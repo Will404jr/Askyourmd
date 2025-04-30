@@ -107,12 +107,12 @@ export async function POST(req: NextRequest) {
 
       // Redirect to the staff home page
       return NextResponse.redirect(`${baseUrl}/Staff/home`);
-    } catch (parseError: any) {
+    } catch (parseError) {
       console.error("SAML parsing error:", parseError);
       const baseUrl = getBaseUrlFromRequest(req);
       return NextResponse.redirect(
         `${baseUrl}/?error=saml_parse_failed&details=${encodeURIComponent(
-          parseError.message
+          (parseError as Error).message
         )}`
       );
     }
@@ -120,11 +120,9 @@ export async function POST(req: NextRequest) {
     console.error("Error processing SAML callback:", error);
     // Use a hardcoded production URL as fallback if everything else fails
     const fallbackUrl = "https://askyourmd.nssfug.org";
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error occurred";
     return NextResponse.redirect(
       `${fallbackUrl}/?error=saml_callback_error&details=${encodeURIComponent(
-        errorMessage
+        (error as Error).message
       )}`
     );
   }

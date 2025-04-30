@@ -18,10 +18,12 @@ const getBaseUrlFromRequest = async () => {
 
 export async function GET() {
   try {
+    console.log("SAML login endpoint called");
     const strategy = createSamlStrategy();
 
     // Check if _saml exists
-    if (!strategy._saml) {
+    if (!strategy || !strategy._saml) {
+      console.error("SAML strategy not properly initialized");
       return NextResponse.json(
         { error: "SAML strategy not properly initialized" },
         { status: 500 }
@@ -30,6 +32,7 @@ export async function GET() {
 
     // Get the base URL from request headers
     const baseUrl = await getBaseUrlFromRequest();
+    console.log("Base URL for SAML login:", baseUrl);
 
     // Create a custom request object that passport-saml can use
     const req = {
@@ -49,26 +52,36 @@ export async function GET() {
       const host = new URL(baseUrl).host; // Your application's hostname
       const options = {}; // Additional options if needed
 
+      console.log("Generating SAML authorize URL with host:", host);
       const url = await strategy._saml.getAuthorizeUrlAsync(
         relayState,
         host,
         options
       );
 
+      console.log("Generated SAML authorize URL:", url);
+
       // Redirect to Azure AD login page
       return NextResponse.redirect(url);
     } catch (err) {
       console.error("Error generating SAML request:", err);
-      return NextResponse.json(
-        { error: "Failed to generate SAML request" },
-        { status: 500 }
+      const errorMessage =
+        err instanceof Error ? err.message : "Unknown error occurred";
+      return NextResponse.redirect(
+        `${baseUrl}/?error=saml_request_failed&details=${encodeURIComponent(
+          errorMessage
+        )}`
       );
     }
   } catch (error) {
     console.error("Error initiating SAML login:", error);
-    return NextResponse.json(
-      { error: "Failed to initiate SAML login" },
-      { status: 500 }
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error occurred";
+    // Use a hardcoded URL as fallback
+    return NextResponse.redirect(
+      `https://askyourmd.nssfug.org/?error=saml_login_error&details=${encodeURIComponent(
+        errorMessage
+      )}`
     );
   }
 }

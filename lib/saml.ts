@@ -8,12 +8,25 @@ const getCertificate = () => {
     const certPath = path.join(process.cwd(), "public/certs/AskYourMDapp.pem");
     console.log("Reading certificate from:", certPath);
 
+    if (!fs.existsSync(certPath)) {
+      console.error("Certificate file does not exist at path:", certPath);
+      // Return a non-empty string to prevent undefined errors
+      return "CERTIFICATE_NOT_FOUND";
+    }
+
     const cert = fs.readFileSync(certPath, "utf-8");
-    console.log("Certificate loaded, length:", cert.length);
+
+    if (!cert || cert.trim() === "") {
+      console.error("Certificate file is empty");
+      return "EMPTY_CERTIFICATE";
+    }
+
+    console.log("Certificate loaded successfully, length:", cert.length);
     return cert;
   } catch (error) {
     console.error("Error reading SAML certificate:", error);
-    return "";
+    // Return a non-empty string to prevent undefined errors
+    return "CERTIFICATE_ERROR";
   }
 };
 
@@ -38,13 +51,16 @@ export const createSamlStrategy = () => {
   const baseUrl = getBaseUrl();
   console.log("Creating SAML strategy with base URL:", baseUrl);
 
+  // Get certificate with fallback
+  const cert = getCertificate();
+
   const samlOptions = {
     // Using values from your Azure AD metadata
     entryPoint:
       "https://login.microsoftonline.com/708f7b5b-20fc-4bc8-9150-b1015a308b9c/saml2",
     issuer: `${baseUrl}/api/saml/metadata`,
     callbackUrl: `${baseUrl}/api/saml/callback`,
-    cert: getCertificate(),
+    cert: cert,
     identifierFormat: null,
     validateInResponseTo: false,
     disableRequestedAuthnContext: true,
@@ -59,6 +75,7 @@ export const createSamlStrategy = () => {
     issuer: samlOptions.issuer,
     callbackUrl: samlOptions.callbackUrl,
     certLength: samlOptions.cert?.length || 0,
+    certType: typeof samlOptions.cert,
   });
 
   return new SamlStrategy(
@@ -112,12 +129,36 @@ export const createSamlStrategy = () => {
 export const generateSamlMetadata = () => {
   console.log("Generating SAML metadata");
   const strategy = createSamlStrategy();
-  const metadata = strategy.generateServiceProviderMetadata(
-    null,
-    getCertificate()
-  );
-  console.log("SAML metadata generated, length:", metadata.length);
-  return metadata;
+
+  try {
+    // Check if the strategy is properly initialized
+    if (!strategy || !strategy._saml) {
+      console.error(
+        "SAML strategy not properly initialized for metadata generation"
+      );
+      return "<EntityDescriptor>Error: SAML strategy not properly initialized</EntityDescriptor>";
+    }
+
+    const metadata = strategy.generateServiceProviderMetadata(
+      null,
+      getCertificate()
+    );
+
+    if (!metadata) {
+      console.error("Generated metadata is empty or undefined");
+      return "<EntityDescriptor>Error: Generated metadata is empty</EntityDescriptor>";
+    }
+
+    console.log(
+      "SAML metadata generated successfully, length:",
+      metadata.length
+    );
+    return metadata;
+  } catch (error) {
+    console.error("Error generating SAML metadata:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return `<EntityDescriptor>Error: ${errorMessage}</EntityDescriptor>`;
+  }
 };
 
 // Parse SAML response
@@ -125,16 +166,16 @@ export const parseSamlResponse = (samlResponse: string): Promise<any> => {
   console.log("Parsing SAML response, length:", samlResponse.length);
 
   return new Promise((resolve, reject) => {
-    const strategy = createSamlStrategy();
-
-    // Check if _saml exists
-    if (!strategy._saml) {
-      console.error("SAML strategy not properly initialized");
-      reject(new Error("SAML strategy not properly initialized"));
-      return;
-    }
-
     try {
+      const strategy = createSamlStrategy();
+
+      // Check if _saml exists
+      if (!strategy || !strategy._saml) {
+        console.error("SAML strategy not properly initialized");
+        reject(new Error("SAML strategy not properly initialized"));
+        return;
+      }
+
       console.log("Validating SAML response");
 
       // Access the internal SAML object to validate the response
