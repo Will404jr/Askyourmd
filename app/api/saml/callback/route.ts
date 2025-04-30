@@ -1,159 +1,114 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { parseSamlResponse } from "@/lib/saml";
 import { getSession } from "@/lib/session";
-import { headers } from "next/headers";
-
-// Helper function to get the base URL from request headers
-const getBaseUrlFromRequest = async () => {
-  const headersList = await headers();
-
-  // Check for X-Forwarded-Host and X-Forwarded-Proto headers
-  const host =
-    headersList.get("x-forwarded-host") ||
-    headersList.get("host") ||
-    "askyourmd.nssfug.org";
-  const proto = headersList.get("x-forwarded-proto") || "https";
-
-  return `${proto}://${host}`;
-};
 
 export async function POST(req: NextRequest) {
   try {
     console.log("SAML callback received");
 
-    // Log headers for debugging
-    const headersList = await headers();
-    console.log("Headers:", Object.fromEntries(headersList.entries()));
-
+    // Get form data from the request
     const formData = await req.formData();
-    const samlResponse = formData.get("SAMLResponse");
-
-    console.log("SAML Response received:", !!samlResponse);
+    const samlResponse = formData.get("SAMLResponse") as string;
+    const relayState = (formData.get("RelayState") as string) || "";
 
     if (!samlResponse) {
-      console.error("No SAML response provided");
-      return NextResponse.redirect(
-        new URL("/login?error=no_saml_response", await getBaseUrlFromRequest())
-      );
+      console.error("No SAML response found in request");
+      return NextResponse.redirect(new URL("/?error=saml_failed", req.url));
     }
+
+    console.log("Parsing SAML response");
+
+    // Parse the SAML response
+    const profile = await parseSamlResponse(samlResponse);
+
+    console.log("SAML profile received:", {
+      nameID: profile.nameID,
+      email:
+        profile[
+          "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+        ] || profile.mail,
+      givenName:
+        profile[
+          "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"
+        ],
+      surname:
+        profile[
+          "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname"
+        ],
+    });
+
+    // Get the session
+    const session = await getSession();
+
+    // Set session data
+    session.id =
+      profile.nameID ||
+      profile[
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
+      ];
+    session.isLoggedIn = true;
+    session.username =
+      profile[
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"
+      ] || "";
+    session.email =
+      profile[
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+      ] ||
+      profile.mail ||
+      "";
+    session.givenName =
+      profile[
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"
+      ] || "";
+    session.surname =
+      profile[
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname"
+      ] || "";
+    session.userPrincipalName =
+      profile.userPrincipalName || profile.nameID || "";
+    session.personnelType = "Staff";
+    session.expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+
+    console.log("Session before save:", {
+      id: session.id,
+      username: session.username,
+      email: session.email,
+      personnelType: session.personnelType,
+      isLoggedIn: session.isLoggedIn,
+      expiresAt: session.expiresAt,
+    });
 
     try {
-      // Convert FormDataEntryValue to string
-      const samlResponseString = samlResponse.toString();
-      console.log("SAML Response length:", samlResponseString.length);
-
-      // Parse SAML response
-      const profile = await parseSamlResponse(samlResponseString);
-      console.log("SAML Profile:", JSON.stringify(profile, null, 2));
-
-      if (!profile) {
-        console.error("No profile returned from SAML response");
-        return NextResponse.redirect(
-          new URL("/login?error=no_profile", await getBaseUrlFromRequest())
-        );
-      }
-
-      // Create user object from SAML profile
-      const user = {
-        id:
-          profile.id ||
-          profile.nameID ||
-          profile[
-            "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
-          ] ||
-          "unknown-id",
-        username:
-          profile.username ||
-          profile[
-            "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"
-          ] ||
-          profile.givenName ||
-          "unknown-user",
-        email:
-          profile.email ||
-          profile[
-            "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
-          ] ||
-          profile.mail ||
-          "unknown-email",
-        personnelType: "Staff",
-      };
-
-      console.log("User object created:", user);
-
-      // Set session
-      try {
-        const session = await getSession();
-        session.id = user.id;
-        session.isLoggedIn = true;
-        session.username = user.username;
-        session.email = user.email;
-        session.personnelType = "Staff";
-        session.expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
-
-        console.log("Session before save:", {
-          id: session.id,
-          username: session.username,
-          email: session.email,
-          personnelType: session.personnelType,
-          isLoggedIn: session.isLoggedIn,
-          expiresAt: session.expiresAt,
-        });
-
-        await session.save();
-        console.log("Session saved successfully");
-
-        // Verify the session was saved by retrieving it again
-        const verifySession = await getSession();
-        console.log("Session after save verification:", {
-          id: verifySession.id,
-          username: verifySession.username,
-          isLoggedIn: verifySession.isLoggedIn,
-        });
-      } catch (sessionError) {
-        console.error("Error saving session:", sessionError);
-        return NextResponse.redirect(
-          new URL(
-            "/login?error=session_save_failed",
-            await getBaseUrlFromRequest()
-          )
-        );
-      }
-
-      // Get the base URL from request headers
-      const baseUrl = await getBaseUrlFromRequest();
-      const redirectUrl = new URL("/staff/home", baseUrl);
-
-      console.log("Redirecting to:", redirectUrl.toString());
-
-      // Create a response with the redirect
-      const response = NextResponse.redirect(redirectUrl, { status: 302 });
-
-      // Log the response headers for debugging
-      console.log(
-        "Response headers:",
-        Object.fromEntries(response.headers.entries())
-      );
-
-      return response;
-    } catch (error) {
-      console.error("Error processing SAML response:", error);
-
-      // Get the base URL from request headers
-      const baseUrl = await getBaseUrlFromRequest();
-
+      await session.save();
+      console.log("Session saved successfully");
+    } catch (saveError) {
+      console.error("Error saving session:", saveError);
       return NextResponse.redirect(
-        new URL("/login?error=saml_failed", baseUrl)
+        new URL("/?error=session_save_failed", req.url)
       );
     }
+
+    // Get the base URL from request headers for redirection
+    const host =
+      req.headers.get("x-forwarded-host") ||
+      req.headers.get("host") ||
+      "askyourmd.nssfug.org";
+    const proto = req.headers.get("x-forwarded-proto") || "https";
+    const baseUrl = `${proto}://${host}`;
+
+    // Redirect to the staff home page
+    return NextResponse.redirect(new URL("/Staff/home", baseUrl));
   } catch (error) {
-    console.error("Error processing form data:", error);
-
-    // Get the base URL from request headers
-    const baseUrl = await getBaseUrlFromRequest();
-
-    return NextResponse.redirect(
-      new URL("/login?error=form_data_failed", baseUrl)
-    );
+    console.error("Error processing SAML callback:", error);
+    return NextResponse.redirect(new URL("/?error=saml_failed", req.url));
   }
+}
+
+// Also handle GET requests for cases where the IdP might redirect with a GET
+export async function GET(req: NextRequest) {
+  console.log(
+    "GET request received at SAML callback - redirecting to login page"
+  );
+  return NextResponse.redirect(new URL("/?error=invalid_saml_flow", req.url));
 }

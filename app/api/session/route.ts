@@ -1,16 +1,27 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 
 export async function GET() {
-  const session = await getSession();
-  return NextResponse.json(session);
-}
+  try {
+    const session = await getSession();
 
-export async function POST(req: NextRequest) {
-  const session = await getSession();
-  const body = await req.json();
+    // If not logged in, return unauthorized
+    if (!session.isLoggedIn) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
 
-  await session.save();
-
-  return NextResponse.json(session);
+    // Return session data (excluding sensitive information)
+    return NextResponse.json({
+      id: session.id,
+      username: session.username,
+      email: session.email,
+      givenName: session.givenName,
+      surname: session.surname,
+      personnelType: session.personnelType,
+      isLoggedIn: session.isLoggedIn,
+    });
+  } catch (error) {
+    console.error("Error in session API:", error);
+    return NextResponse.json({ error: "Session error" }, { status: 500 });
+  }
 }

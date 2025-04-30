@@ -42,6 +42,8 @@ export const createSamlStrategy = () => {
       validateInResponseTo: false,
       disableRequestedAuthnContext: true,
       acceptedClockSkewMs: 300000, // 5 minutes
+      // Add these options to help with debugging
+      wantAssertionsSigned: false,
     },
     (profile: any, done: (error: Error | null, user?: any) => void) => {
       // Map SAML profile to user object

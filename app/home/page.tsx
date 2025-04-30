@@ -3,47 +3,45 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-// This is a simple redirect page that checks the session and redirects accordingly
 export default function HomePage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Fetch the session data
-    const checkSession = async () => {
+    // Fetch session info to determine user type
+    async function checkSession() {
       try {
         const response = await fetch("/api/session");
 
         if (response.ok) {
-          const session = await response.json();
+          const data = await response.json();
 
           // Redirect based on user type
-          if (session.personnelType === "Md") {
+          if (data.personnelType === "Md") {
             router.push("/MD/home");
-          } else if (session.personnelType === "Staff") {
-            router.push("/staff/home");
+          } else if (data.personnelType === "Staff") {
+            router.push("/Staff/home");
           } else {
-            // If no personnel type is set, redirect to login
-            router.push("/login");
+            // Unknown user type, redirect to login
+            router.push("/");
           }
         } else {
-          // If session fetch fails, redirect to login
-          router.push("/login");
+          // No valid session, redirect to login
+          router.push("/");
         }
       } catch (error) {
         console.error("Error checking session:", error);
-        router.push("/login");
+        router.push("/");
       }
-    };
+    }
 
     checkSession();
   }, [router]);
 
-  // Show a loading state while checking the session
   return (
-    <div className="flex items-center justify-center min-h-screen bg-[#13263c]">
-      <div className="text-white text-center">
-        <h1 className="text-2xl font-bold mb-4">Loading...</h1>
-        <p>Please wait while we redirect you to the appropriate page.</p>
+    <div className="flex items-center justify-center min-h-screen bg-gray-100">
+      <div className="text-center">
+        <h1 className="text-2xl font-bold mb-4">Redirecting...</h1>
+        <p>Please wait while we redirect you to the appropriate dashboard.</p>
       </div>
     </div>
   );

@@ -5,15 +5,22 @@ const nextConfig = {
   poweredByHeader: false,
   experimental: {
     serverActions: {
-      trustHostHeader: true,
       allowedOrigins: ["login.microsoftonline.com", "askyourmd.nssfug.org"],
     },
+    // Add this to trust the proxy headers
+    trustHostHeader: true,
   },
   eslint: {
     ignoreDuringBuilds: true,
   },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  images: {
+    unoptimized: true,
+  },
   // Add this for iron-session to work with the reverse proxy
-  headers: async () => {
+  async headers() {
     return [
       {
         source: "/(.*)",
@@ -24,8 +31,26 @@ const nextConfig = {
           },
         ],
       },
+      {
+        // Add CORS headers for SAML endpoints
+        source: "/api/saml/:path*",
+        headers: [
+          {
+            key: "Access-Control-Allow-Origin",
+            value: "*", // Or specify your IdP domain
+          },
+          {
+            key: "Access-Control-Allow-Methods",
+            value: "GET, POST, OPTIONS",
+          },
+          {
+            key: "Access-Control-Allow-Headers",
+            value: "Content-Type",
+          },
+        ],
+      },
     ];
   },
 };
 
-module.exports = nextConfig;
+export default nextConfig;

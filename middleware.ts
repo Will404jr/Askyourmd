@@ -7,6 +7,24 @@ export async function middleware(request: NextRequest) {
   // Log the request for debugging
   console.log(`Middleware processing: ${path}`);
 
+  // Clone the request headers for potential modifications
+  const requestHeaders = new Headers(request.headers);
+
+  // Add x-url header to indicate the original URL
+  requestHeaders.set("x-url", request.url);
+
+  // For SAML callback, ensure we preserve the POST method and body
+  if (path === "/api/saml/callback") {
+    console.log("Processing SAML callback in middleware - passing through");
+
+    // Make sure we don't interfere with the SAML POST request
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
+  }
+
   // Public paths that don't require authentication
   const publicPaths = [
     "/",
@@ -25,7 +43,11 @@ export async function middleware(request: NextRequest) {
   // If the path is public, allow access
   if (isPublicPath) {
     console.log(`Public path: ${path}, allowing access`);
-    return NextResponse.next();
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
   }
 
   // Check if the user is authenticated
@@ -68,7 +90,11 @@ export async function middleware(request: NextRequest) {
     // Allow access to all other paths if a session cookie exists
     // The actual authorization will be handled by the page components
     console.log(`Session cookie found, allowing access to ${path}`);
-    return NextResponse.next();
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
   } catch (error) {
     console.error(`Error in middleware:`, error);
     // Get the base URL from request headers
