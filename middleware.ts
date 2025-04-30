@@ -29,7 +29,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Check if the user is authenticated
-  const sessionCookie = request.cookies.get("session");
+  const sessionCookie = request.cookies.get("auth-session"); // Use the iron-session cookie name
 
   if (!sessionCookie) {
     console.log(`No session cookie found, redirecting to login`);
@@ -46,13 +46,12 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    // Parse the session cookie
-    const session = JSON.parse(atob(sessionCookie.value));
-    console.log(`Session found for user: ${session.username}`);
+    // We can't directly decode the iron-session cookie as it's encrypted
+    // But we can check if it exists and handle root path redirection
 
-    // Check if the session is expired
-    if (session.expiresAt < Date.now()) {
-      console.log(`Session expired, redirecting to login`);
+    // Root path handling - redirect based on the existence of a session
+    if (path === "/") {
+      console.log("Root path detected, redirecting to home page");
       // Get the base URL from request headers
       const host =
         request.headers.get("x-forwarded-host") ||
@@ -61,48 +60,17 @@ export async function middleware(request: NextRequest) {
       const proto = request.headers.get("x-forwarded-proto") || "https";
       const baseUrl = `${proto}://${host}`;
 
-      // Redirect to login page if session is expired
-      return NextResponse.redirect(new URL("/", baseUrl));
+      // Since we can't determine the user type from the encrypted cookie,
+      // redirect to a general home page that can then redirect based on session data
+      return NextResponse.redirect(new URL("/home", baseUrl));
     }
 
-    // Check if the user is trying to access a protected route
-    if (path.startsWith("/MD") && session.personnelType !== "Md") {
-      console.log(
-        `Staff user trying to access MD route, redirecting to staff home`
-      );
-      // Get the base URL from request headers
-      const host =
-        request.headers.get("x-forwarded-host") ||
-        request.headers.get("host") ||
-        "askyourmd.nssfug.org";
-      const proto = request.headers.get("x-forwarded-proto") || "https";
-      const baseUrl = `${proto}://${host}`;
-
-      // Redirect to staff home if trying to access MD routes as staff
-      return NextResponse.redirect(new URL("/staff/home", baseUrl));
-    }
-
-    if (path.startsWith("/staff") && session.personnelType !== "Staff") {
-      console.log(
-        `MD user trying to access staff route, redirecting to MD home`
-      );
-      // Get the base URL from request headers
-      const host =
-        request.headers.get("x-forwarded-host") ||
-        request.headers.get("host") ||
-        "askyourmd.nssfug.org";
-      const proto = request.headers.get("x-forwarded-proto") || "https";
-      const baseUrl = `${proto}://${host}`;
-
-      // Redirect to MD home if trying to access staff routes as MD
-      return NextResponse.redirect(new URL("/MD/home", baseUrl));
-    }
-
-    // Allow access
-    console.log(`Access granted to ${path}`);
+    // Allow access to all other paths if a session cookie exists
+    // The actual authorization will be handled by the page components
+    console.log(`Session cookie found, allowing access to ${path}`);
     return NextResponse.next();
   } catch (error) {
-    console.error(`Error processing session:`, error);
+    console.error(`Error in middleware:`, error);
     // Get the base URL from request headers
     const host =
       request.headers.get("x-forwarded-host") ||
@@ -111,7 +79,7 @@ export async function middleware(request: NextRequest) {
     const proto = request.headers.get("x-forwarded-proto") || "https";
     const baseUrl = `${proto}://${host}`;
 
-    // Redirect to login page if session is invalid
+    // Redirect to login page if there's an error
     return NextResponse.redirect(new URL("/", baseUrl));
   }
 }

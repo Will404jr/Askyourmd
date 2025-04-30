@@ -12,6 +12,20 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Add this for iron-session to work with the reverse proxy
+  headers: async () => {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-store, max-age=0",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

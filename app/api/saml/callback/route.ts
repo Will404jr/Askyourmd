@@ -40,10 +40,18 @@ export async function POST(req: NextRequest) {
     try {
       // Convert FormDataEntryValue to string
       const samlResponseString = samlResponse.toString();
+      console.log("SAML Response length:", samlResponseString.length);
 
       // Parse SAML response
       const profile = await parseSamlResponse(samlResponseString);
-      console.log("SAML Profile:", profile);
+      console.log("SAML Profile:", JSON.stringify(profile, null, 2));
+
+      if (!profile) {
+        console.error("No profile returned from SAML response");
+        return NextResponse.redirect(
+          new URL("/login?error=no_profile", await getBaseUrlFromRequest())
+        );
+      }
 
       // Create user object from SAML profile
       const user = {
@@ -52,42 +60,82 @@ export async function POST(req: NextRequest) {
           profile.nameID ||
           profile[
             "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
-          ],
+          ] ||
+          "unknown-id",
         username:
           profile.username ||
           profile[
             "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"
           ] ||
-          "",
+          profile.givenName ||
+          "unknown-user",
         email:
           profile.email ||
           profile[
             "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
           ] ||
           profile.mail ||
-          "",
+          "unknown-email",
         personnelType: "Staff",
       };
 
       console.log("User object created:", user);
 
       // Set session
-      const session = await getSession();
-      session.id = user.id;
-      session.isLoggedIn = true;
-      session.username = user.username;
-      session.email = user.email;
-      session.personnelType = "Staff";
-      session.expiresAt = Date.now() + 24 * 60 * 60 * 1000;
-      await session.save();
+      try {
+        const session = await getSession();
+        session.id = user.id;
+        session.isLoggedIn = true;
+        session.username = user.username;
+        session.email = user.email;
+        session.personnelType = "Staff";
+        session.expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
 
-      console.log("Session saved, redirecting to staff home");
+        console.log("Session before save:", {
+          id: session.id,
+          username: session.username,
+          email: session.email,
+          personnelType: session.personnelType,
+          isLoggedIn: session.isLoggedIn,
+          expiresAt: session.expiresAt,
+        });
+
+        await session.save();
+        console.log("Session saved successfully");
+
+        // Verify the session was saved by retrieving it again
+        const verifySession = await getSession();
+        console.log("Session after save verification:", {
+          id: verifySession.id,
+          username: verifySession.username,
+          isLoggedIn: verifySession.isLoggedIn,
+        });
+      } catch (sessionError) {
+        console.error("Error saving session:", sessionError);
+        return NextResponse.redirect(
+          new URL(
+            "/login?error=session_save_failed",
+            await getBaseUrlFromRequest()
+          )
+        );
+      }
 
       // Get the base URL from request headers
       const baseUrl = await getBaseUrlFromRequest();
+      const redirectUrl = new URL("/staff/home", baseUrl);
 
-      // Redirect to staff home page
-      return NextResponse.redirect(new URL("/staff/home", baseUrl));
+      console.log("Redirecting to:", redirectUrl.toString());
+
+      // Create a response with the redirect
+      const response = NextResponse.redirect(redirectUrl, { status: 302 });
+
+      // Log the response headers for debugging
+      console.log(
+        "Response headers:",
+        Object.fromEntries(response.headers.entries())
+      );
+
+      return response;
     } catch (error) {
       console.error("Error processing SAML response:", error);
 
