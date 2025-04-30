@@ -5,7 +5,7 @@ import { Strategy as SamlStrategy } from "passport-saml";
 // Read the Azure AD certificate
 const getCertificate = () => {
   try {
-    const certPath = path.join(process.cwd(), "public/certs/azuread_cert.pem");
+    const certPath = path.join(process.cwd(), "public/certs/AskYourMD.cer");
     console.log("Reading certificate from:", certPath);
 
     const cert = fs.readFileSync(certPath, "utf-8");
