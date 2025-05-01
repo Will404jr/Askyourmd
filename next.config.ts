@@ -9,6 +9,8 @@ const nextConfig = {
     },
     // Add this to trust the proxy headers
     trustHostHeader: true,
+    appDir: true,
+    serverComponentsExternalPackages: [],
   },
   eslint: {
     ignoreDuringBuilds: true,

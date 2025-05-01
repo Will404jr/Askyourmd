@@ -82,7 +82,7 @@ const LoginForm = () => {
 
   const handleSamlLogin = () => {
     // Redirect to our internal Azure AD login endpoint
-    window.location.href = "/api/auth/login";
+    window.location.href = "/api/auth/stateless-login";
   };
 
   return (

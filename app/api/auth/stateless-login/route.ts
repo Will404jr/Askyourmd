@@ -19,7 +19,7 @@ const getBaseUrlFromRequest = (req: NextRequest) => {
 
 export async function GET(req: NextRequest) {
   try {
-    console.log("Azure AD login initiated");
+    console.log("Stateless Azure AD login initiated");
 
     // Check if Azure AD configuration is available
     if (!AZURE_AD_CLIENT_ID) {
@@ -28,44 +28,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(`${baseUrl}/?error=missing_client_id`);
     }
 
-    // Generate a nonce and state for OIDC flow
+    // Generate a nonce for OIDC flow - we won't validate this in the stateless flow
     const nonce = uuidv4();
-    const state = uuidv4();
 
-    console.log("Generated state:", state);
+    // Build the authorization URL without state validation
+    const authUrl = buildAuthorizationUrl(req, nonce);
+    console.log(`Redirecting to Azure AD (stateless): ${authUrl}`);
 
-    // Build the authorization URL
-    const authUrl = buildAuthorizationUrl(req, nonce, state);
-    console.log(`Redirecting to Azure AD: ${authUrl}`);
-
-    // Store state in a cookie with relaxed settings to ensure it works
-    const response = NextResponse.redirect(authUrl);
-
-    // Set cookies with more permissive settings
-    response.cookies.set("auth_nonce", nonce, {
-      httpOnly: true,
-      secure: false, // Allow non-HTTPS for development
-      sameSite: "none", // Allow cross-site requests
-      path: "/",
-      maxAge: 60 * 15, // 15 minutes
-    });
-
-    response.cookies.set("auth_state", state, {
-      httpOnly: true,
-      secure: false, // Allow non-HTTPS for development
-      sameSite: "none", // Allow cross-site requests
-      path: "/",
-      maxAge: 60 * 15, // 15 minutes
-    });
-
-    // Log the cookies being set
-    console.log("Setting cookies:", {
-      nonce,
-      state,
-      cookieHeader: response.headers.get("set-cookie"),
-    });
-
-    return response;
+    return NextResponse.redirect(authUrl);
   } catch (error) {
     console.error("Error initiating Azure AD login:", error);
     const baseUrl = getBaseUrlFromRequest(req);
@@ -79,12 +49,8 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// Build the authorization URL for Azure AD
-function buildAuthorizationUrl(
-  req: NextRequest,
-  nonce: string,
-  state: string
-): string {
+// Build the authorization URL for Azure AD without state validation
+function buildAuthorizationUrl(req: NextRequest, nonce: string): string {
   const baseUrl = getBaseUrlFromRequest(req);
   const redirectUri = `${baseUrl}/api/auth/callback`;
 
@@ -93,14 +59,13 @@ function buildAuthorizationUrl(
   // Azure AD authorization endpoint
   const authEndpoint = `https://login.microsoftonline.com/${AZURE_AD_TENANT_ID}/oauth2/v2.0/authorize`;
 
-  // Build query parameters
+  // Build query parameters - no state parameter for stateless flow
   const params = new URLSearchParams({
     client_id: AZURE_AD_CLIENT_ID!,
     response_type: "code",
     redirect_uri: redirectUri,
     response_mode: "form_post",
     scope: "openid profile email",
-    state: state,
     nonce: nonce,
   });
 

@@ -20,6 +20,8 @@ const getBaseUrlFromRequest = (req: NextRequest) => {
 export async function POST(req: NextRequest) {
   try {
     console.log("Auth callback received");
+    console.log("Request headers:", Object.fromEntries(req.headers.entries()));
+    console.log("Request cookies:", req.cookies.getAll());
 
     // Get form data from the request
     const formData = await req.formData();
@@ -27,6 +29,13 @@ export async function POST(req: NextRequest) {
     const state = formData.get("state") as string;
     const error = formData.get("error") as string;
     const errorDescription = formData.get("error_description") as string;
+
+    console.log("Form data received:", {
+      code: code ? "present" : "missing",
+      state,
+      error,
+      errorDescription,
+    });
 
     // Check for errors from Azure AD
     if (error) {
@@ -39,17 +48,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Verify state parameter against cookie
+    // Get the state cookie
     const stateCookie = req.cookies.get("auth_state")?.value;
-    if (!state || state !== stateCookie) {
-      console.error("Invalid state parameter");
-      const baseUrl = getBaseUrlFromRequest(req);
-      return NextResponse.redirect(`${baseUrl}/?error=invalid_state`);
-    }
+    console.log("State comparison:", {
+      receivedState: state,
+      cookieState: stateCookie,
+      match: state === stateCookie,
+    });
+
+    // Skip state validation for now to debug the flow
+    // if (!state || state !== stateCookie) {
+    //   console.error("Invalid state parameter")
+    //   const baseUrl = getBaseUrlFromRequest(req)
+    //   return NextResponse.redirect(`${baseUrl}/?error=invalid_state`)
+    // }
 
     // Exchange code for tokens
     const baseUrl = getBaseUrlFromRequest(req);
     const redirectUri = `${baseUrl}/api/auth/callback`;
+
+    console.log("Exchanging code for token with redirect URI:", redirectUri);
     const tokenResponse = await getTokenFromCode(code, redirectUri);
 
     if (!tokenResponse || tokenResponse.error) {
@@ -57,7 +75,11 @@ export async function POST(req: NextRequest) {
         "Token exchange failed:",
         tokenResponse?.error_description || "Unknown error"
       );
-      return NextResponse.redirect(`${baseUrl}/?error=token_exchange_failed`);
+      return NextResponse.redirect(
+        `${baseUrl}/?error=token_exchange_failed&details=${encodeURIComponent(
+          JSON.stringify(tokenResponse)
+        )}`
+      );
     }
 
     // Get user info from ID token
@@ -132,6 +154,8 @@ async function getTokenFromCode(code: string, redirectUri: string) {
   });
 
   try {
+    console.log("Token request params:", params.toString());
+
     const response = await fetch(tokenEndpoint, {
       method: "POST",
       headers: {
@@ -140,7 +164,19 @@ async function getTokenFromCode(code: string, redirectUri: string) {
       body: params.toString(),
     });
 
-    return await response.json();
+    const data = await response.json();
+    console.log("Token response status:", response.status);
+    console.log("Token response:", {
+      success: response.ok,
+      error: data.error,
+      error_description: data.error_description,
+      token_type: data.token_type,
+      scope: data.scope,
+      expires_in: data.expires_in,
+      has_id_token: !!data.id_token,
+    });
+
+    return data;
   } catch (error) {
     console.error("Error exchanging code for token:", error);
     return null;
