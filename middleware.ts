@@ -16,6 +16,9 @@ const publicPaths = [
   "/api/check-certificate",
 ];
 
+// The public-facing URL of your application
+const BASE_URL = "https://askyourmd.nssfug.org";
+
 export async function middleware(request: NextRequest) {
   const session = await getSession();
   const { pathname } = request.nextUrl;
@@ -27,27 +30,19 @@ export async function middleware(request: NextRequest) {
 
   // If not logged in and trying to access a protected route, redirect to login
   if (!session.isLoggedIn && !isPublicPath) {
-    return NextResponse.redirect(
-      new URL("https://askyourmd.nssfug.org/", request.url)
-    );
+    return NextResponse.redirect(new URL("/", BASE_URL));
   }
 
   // If logged in and trying to access login page, redirect based on personnelType
   if (session.isLoggedIn && isPublicPath) {
     // Determine where to redirect based on user type
     if (session.personnelType === "MD") {
-      return NextResponse.redirect(
-        new URL("https://askyourmd.nssfug.org/MD/home", request.url)
-      );
+      return NextResponse.redirect(new URL("/MD/home", BASE_URL));
     } else if (session.personnelType === "Staff") {
-      return NextResponse.redirect(
-        new URL("https://askyourmd.nssfug.org/staff/home", request.url)
-      );
+      return NextResponse.redirect(new URL("/staff/home", BASE_URL));
     } else {
       // Fallback for any other user type
-      return NextResponse.redirect(
-        new URL("https://askyourmd.nssfug.org/dashboard", request.url)
-      );
+      return NextResponse.redirect(new URL("/dashboard", BASE_URL));
     }
   }
 
