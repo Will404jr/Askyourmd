@@ -5,11 +5,7 @@ const nextConfig = {
   poweredByHeader: false,
   experimental: {
     serverActions: {
-      allowedOrigins: [
-        "login.microsoftonline.com",
-        "askyourmd.nssfug.org",
-        "auth.askyourmd.nssfug.org",
-      ],
+      allowedOrigins: ["login.microsoftonline.com", "askyourmd.nssfug.org"],
     },
     // Add this to trust the proxy headers
     trustHostHeader: true,
@@ -36,10 +32,6 @@ const nextConfig = {
         ],
       },
     ];
-  },
-  env: {
-    NEXT_PUBLIC_AUTH_SERVICE_URL: "http://localhost:4000", // Change to your actual auth service URL in production
-    AUTH_SERVICE_URL: "http://localhost:4000", // Server-side URL for the auth service
   },
 };
 

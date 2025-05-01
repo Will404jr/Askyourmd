@@ -31,19 +31,23 @@ const LoginForm = () => {
       let errorMessage = "Authentication failed. Please try again.";
 
       switch (error) {
-        case "saml_failed":
-        case "auth_verification_failed":
-          errorMessage = "Authentication failed. Please try again.";
+        case "azure_ad_error":
+          errorMessage = `Azure AD error: ${errorDetails || "Unknown error"}`;
           break;
-        case "no_state_parameter":
-          errorMessage = "Invalid authentication request.";
+        case "invalid_state":
+          errorMessage = "Invalid authentication state.";
           break;
-        case "invalid_auth_response":
-          errorMessage = "Invalid response from authentication service.";
+        case "token_exchange_failed":
+          errorMessage = "Failed to complete authentication.";
+          break;
+        case "invalid_id_token":
+          errorMessage = "Invalid identity token received.";
           break;
         case "session_save_failed":
           errorMessage = "Failed to create session. Please try again.";
           break;
+        default:
+          errorMessage = `Authentication error: ${error}`;
       }
 
       toast.error(errorMessage);
@@ -77,10 +81,8 @@ const LoginForm = () => {
   };
 
   const handleSamlLogin = () => {
-    // Redirect to the authentication microservice
-    const authServiceUrl =
-      process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || "http://localhost:4000";
-    window.location.href = `${authServiceUrl}/login`;
+    // Redirect to our internal Azure AD login endpoint
+    window.location.href = "/api/auth/login";
   };
 
   return (
