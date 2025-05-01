@@ -4,16 +4,16 @@ import { getSession } from "./lib/session";
 
 // Paths that don't require authentication
 const publicPaths = [
-  "/",
-  "/api/login",
-  "/api/auth/login",
-  "/api/auth/callback",
-  "/api/auth/stateless-login",
-  "/api/saml/login",
-  "/api/saml/callback",
-  "/api/saml/metadata",
-  "/api/saml/logout",
-  "/api/check-certificate",
+  "https://askyourmd.nssfug.org/",
+  "https://askyourmd.nssfug.org/api/login",
+  "https://askyourmd.nssfug.org/api/auth/login",
+  "https://askyourmd.nssfug.org/api/auth/callback",
+  "https://askyourmd.nssfug.org/api/auth/stateless-login",
+  "https://askyourmd.nssfug.org/api/saml/login",
+  "https://askyourmd.nssfug.org/api/saml/callback",
+  "https://askyourmd.nssfug.org/api/saml/metadata",
+  "https://askyourmd.nssfug.org/api/saml/logout",
+  "https://askyourmd.nssfug.org/api/check-certificate",
 ];
 
 export async function middleware(request: NextRequest) {
@@ -27,19 +27,27 @@ export async function middleware(request: NextRequest) {
 
   // If not logged in and trying to access a protected route, redirect to login
   if (!session.isLoggedIn && !isPublicPath) {
-    return NextResponse.redirect(new URL("/", request.url));
+    return NextResponse.redirect(
+      new URL("https://askyourmd.nssfug.org/", request.url)
+    );
   }
 
   // If logged in and trying to access login page, redirect based on personnelType
   if (session.isLoggedIn && isPublicPath) {
     // Determine where to redirect based on user type
     if (session.personnelType === "MD") {
-      return NextResponse.redirect(new URL("/MD/home", request.url));
+      return NextResponse.redirect(
+        new URL("https://askyourmd.nssfug.org/MD/home", request.url)
+      );
     } else if (session.personnelType === "Staff") {
-      return NextResponse.redirect(new URL("/staff/home", request.url));
+      return NextResponse.redirect(
+        new URL("https://askyourmd.nssfug.org/staff/home", request.url)
+      );
     } else {
       // Fallback for any other user type
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+      return NextResponse.redirect(
+        new URL("https://askyourmd.nssfug.org/dashboard", request.url)
+      );
     }
   }
 
