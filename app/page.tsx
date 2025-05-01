@@ -26,8 +26,27 @@ const LoginForm = () => {
   useEffect(() => {
     // Check for error in URL
     const error = searchParams?.get("error");
-    if (error === "saml_failed") {
-      toast.error("SAML authentication failed. Please try again.");
+    if (error) {
+      const errorDetails = searchParams?.get("details") || "";
+      let errorMessage = "Authentication failed. Please try again.";
+
+      switch (error) {
+        case "saml_failed":
+        case "auth_verification_failed":
+          errorMessage = "Authentication failed. Please try again.";
+          break;
+        case "no_state_parameter":
+          errorMessage = "Invalid authentication request.";
+          break;
+        case "invalid_auth_response":
+          errorMessage = "Invalid response from authentication service.";
+          break;
+        case "session_save_failed":
+          errorMessage = "Failed to create session. Please try again.";
+          break;
+      }
+
+      toast.error(errorMessage);
     }
   }, [searchParams]);
 
@@ -58,8 +77,10 @@ const LoginForm = () => {
   };
 
   const handleSamlLogin = () => {
-    // Redirect to SAML login endpoint
-    window.location.href = "/api/saml/login";
+    // Redirect to the authentication microservice
+    const authServiceUrl =
+      process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || "http://localhost:4000";
+    window.location.href = `${authServiceUrl}/login`;
   };
 
   return (

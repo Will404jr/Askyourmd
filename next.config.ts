@@ -5,7 +5,11 @@ const nextConfig = {
   poweredByHeader: false,
   experimental: {
     serverActions: {
-      allowedOrigins: ["login.microsoftonline.com", "askyourmd.nssfug.org"],
+      allowedOrigins: [
+        "login.microsoftonline.com",
+        "askyourmd.nssfug.org",
+        "auth.askyourmd.nssfug.org",
+      ],
     },
     // Add this to trust the proxy headers
     trustHostHeader: true,
@@ -31,25 +35,11 @@ const nextConfig = {
           },
         ],
       },
-      {
-        // Add CORS headers for SAML endpoints
-        source: "/api/saml/:path*",
-        headers: [
-          {
-            key: "Access-Control-Allow-Origin",
-            value: "*", // Or specify your IdP domain
-          },
-          {
-            key: "Access-Control-Allow-Methods",
-            value: "GET, POST, OPTIONS",
-          },
-          {
-            key: "Access-Control-Allow-Headers",
-            value: "Content-Type",
-          },
-        ],
-      },
     ];
+  },
+  env: {
+    NEXT_PUBLIC_AUTH_SERVICE_URL: "http://localhost:4000", // Change to your actual auth service URL in production
+    AUTH_SERVICE_URL: "http://localhost:4000", // Server-side URL for the auth service
   },
 };
 
