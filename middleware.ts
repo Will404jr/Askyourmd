@@ -29,6 +29,9 @@ export async function middleware(request: NextRequest) {
   const publicPaths = [
     "/",
     "/api/login",
+    "/api/auth/login",
+    "/api/auth/callback",
+    "/api/auth/stateless-login",
     "/api/saml/login",
     "/api/saml/callback",
     "/api/saml/metadata",
