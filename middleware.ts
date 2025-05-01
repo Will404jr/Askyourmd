@@ -4,16 +4,16 @@ import { getSession } from "./lib/session";
 
 // Paths that don't require authentication
 const publicPaths = [
-  "https://askyourmd.nssfug.org/",
-  "https://askyourmd.nssfug.org/api/login",
-  "https://askyourmd.nssfug.org/api/auth/login",
-  "https://askyourmd.nssfug.org/api/auth/callback",
-  "https://askyourmd.nssfug.org/api/auth/stateless-login",
-  "https://askyourmd.nssfug.org/api/saml/login",
-  "https://askyourmd.nssfug.org/api/saml/callback",
-  "https://askyourmd.nssfug.org/api/saml/metadata",
-  "https://askyourmd.nssfug.org/api/saml/logout",
-  "https://askyourmd.nssfug.org/api/check-certificate",
+  "/",
+  "/api/login",
+  "/api/auth/login",
+  "/api/auth/callback",
+  "/api/auth/stateless-login",
+  "/api/saml/login",
+  "/api/saml/callback",
+  "/api/saml/metadata",
+  "/api/saml/logout",
+  "/api/check-certificate",
 ];
 
 export async function middleware(request: NextRequest) {
