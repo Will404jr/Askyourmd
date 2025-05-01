@@ -6,6 +6,7 @@ import { getSession } from "./lib/session";
 const publicPaths = [
   "/",
   "/api/login",
+  "/api/users",
   "/api/auth/login",
   "/api/auth/callback",
   "/api/auth/stateless-login",
