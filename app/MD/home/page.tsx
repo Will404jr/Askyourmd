@@ -242,12 +242,39 @@ export default function EnhancedIssuesTable() {
       console.log("Assigning Issue:", { issueId, userId });
       setEmailSendingStatus(null);
 
+      // Get the user data from userMap
+      const assigneeUser = userMap[userId];
+
+      // Get the submitter data if available
+      const selectedIssueData = issues.find((issue) => issue._id === issueId);
+      const submitterUser = selectedIssueData?.submittedBy
+        ? userMap[selectedIssueData.submittedBy]
+        : null;
+
       const response = await fetch(`/api/issues/${issueId}/assign`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ assignedTo: userId, status: "Pending" }),
+        body: JSON.stringify({
+          assignedTo: userId,
+          status: "Pending",
+          // Include user data to avoid additional API calls
+          assigneeData: assigneeUser
+            ? {
+                id: assigneeUser.id,
+                displayName: assigneeUser.displayName,
+                mail: assigneeUser.mail || assigneeUser.userPrincipalName,
+              }
+            : null,
+          submitterData: submitterUser
+            ? {
+                id: submitterUser.id,
+                displayName: submitterUser.displayName,
+                mail: submitterUser.mail || submitterUser.userPrincipalName,
+              }
+            : null,
+        }),
       });
 
       if (!response.ok) {
@@ -268,22 +295,6 @@ export default function EnhancedIssuesTable() {
         )
       );
 
-      // Fetch the assigned user's details to update the userMap
-      try {
-        const userResponse = await fetch(`/api/users/${userId}`);
-        if (userResponse.ok) {
-          const userData = await userResponse.json();
-          if (userData.user) {
-            setUserMap((prevMap) => ({
-              ...prevMap,
-              [userId]: userData.user,
-            }));
-          }
-        }
-      } catch (error) {
-        console.error(`Error fetching assigned user ${userId}:`, error);
-      }
-
       // Set success status for email
       setEmailSendingStatus("success");
 
@@ -297,8 +308,8 @@ export default function EnhancedIssuesTable() {
       console.error("Error assigning issue:", error);
       setEmailSendingStatus("error");
       setEmailErrorMessage(
-        error && typeof error === "object" && "message" in error
-          ? String(error.message)
+        error instanceof Error
+          ? error.message
           : "Failed to send email notification"
       );
     }
@@ -641,7 +652,7 @@ export default function EnhancedIssuesTable() {
                       Assigned To
                     </h3>
                     <p className="font-medium">
-                      {getUserDisplayName(selectedIssue.assignedTo)}
+                      {getUserDisplayName(selectedIssue.assignedTo ?? "")}
                     </p>
                   </div>
                   <div>
@@ -768,9 +779,9 @@ export default function EnhancedIssuesTable() {
                             <p className="text-sm font-medium text-gray-900 truncate hover:text-blue-600">
                               {user.displayName}
                             </p>
-                            {/* <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                               {user.department || "Staff"}
-                            </span> */}
+                            </span>
                           </div>
                           <p className="text-sm text-gray-500 truncate">
                             {user.mail || user.userPrincipalName}

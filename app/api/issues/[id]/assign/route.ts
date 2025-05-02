@@ -4,6 +4,13 @@ import { Issue } from "@/lib/models/issues"; // Adjust this import path as neede
 import dbConnect from "@/lib/db";
 import nodemailer from "nodemailer";
 
+// Define interfaces for user data
+interface UserData {
+  id: string;
+  displayName: string;
+  mail: string;
+}
+
 // Create a transporter with debugging enabled
 const transporter = nodemailer.createTransport({
   host: "192.168.192.160",
@@ -16,25 +23,6 @@ const transporter = nodemailer.createTransport({
     rejectUnauthorized: false,
   },
 });
-
-// Create a custom fetch function that ignores SSL certificate errors
-const fetchWithoutCertValidation = async (
-  url: string,
-  options?: RequestInit
-) => {
-  // In Node.js environment, we need to configure the fetch to ignore SSL errors
-  const { Agent } = await import("https");
-
-  const httpsAgent = new Agent({
-    rejectUnauthorized: false, // Ignore SSL certificate errors
-  });
-
-  return fetch(url, {
-    ...options,
-    // @ts-ignore - The agent property exists but might not be in the types
-    agent: httpsAgent,
-  });
-};
 
 // Test SMTP connection function
 async function testSmtpConnection() {
@@ -61,10 +49,14 @@ export async function PUT(
     await dbConnect();
     console.log("✅ Database connection established");
 
-    const { assignedTo, status } = await request.json();
+    // Get data from request body including user data
+    const { assignedTo, status, assigneeData, submitterData } =
+      await request.json();
     console.log(
       `📋 Assignment details - assignedTo: ${assignedTo}, status: ${status}`
     );
+    console.log(`📋 Assignee data:`, assigneeData);
+    console.log(`📋 Submitter data:`, submitterData);
 
     // Get the issue before updating to access the submittedBy field
     const issue = await Issue.findById(id);
@@ -99,207 +91,133 @@ export async function PUT(
 
     // Send email notifications
     try {
-      // Fetch user details for the assignee
-      const baseUrl = process.env.BASE_URL || "https://askyourmd.nssfug.org";
-      const assigneeUrl = `${baseUrl}/api/users/${assignedTo}`;
-      console.log(`🔍 Fetching assignee details from: ${assigneeUrl}`);
+      // Send email to assignee if we have their data
+      if (assigneeData && assigneeData.mail) {
+        console.log(`📧 Preparing email to assignee: ${assigneeData.mail}`);
 
-      const assigneeResponse = await fetchWithoutCertValidation(assigneeUrl);
-      console.log(
-        `📊 Assignee API response status: ${assigneeResponse.status}`
-      );
+        const emailContent = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+            <h2 style="color: #1d4ed8;">New Issue Assigned to You</h2>
+            <p>Hello ${assigneeData.displayName},</p>
+            <p>An issue has been assigned to you in the Issue Management System.</p>
+            <div style="background-color: #f9fafb; padding: 15px; border-radius: 5px; margin: 15px 0;">
+              <p><strong>Issue:</strong> ${updatedIssue.subject}</p>
+              <p><strong>Category:</strong> ${updatedIssue.category}</p>
+              <p><strong>Status:</strong> ${updatedIssue.status}</p>
+            </div>
+            <p>Please log in to the system to view the details and take appropriate action.</p>
+            <p>Thank you,<br>Issue Management System</p>
+          </div>
+        `;
 
-      if (assigneeResponse.ok) {
-        const assigneeData = await assigneeResponse.json();
-        const assignee = assigneeData.user;
+        const mailOptions = {
+          from: '"Issue Management System" <askyourmd@nssfug.org>',
+          to: assigneeData.mail,
+          subject: `New Issue Assignment: ${updatedIssue.subject}`,
+          html: emailContent,
+        };
+
         console.log(
-          `✅ Assignee data retrieved: ${JSON.stringify(
-            assignee
-              ? {
-                  id: assignee.id,
-                  displayName: assignee.displayName,
-                  mail: assignee.mail,
-                }
-              : { error: "No user data" }
-          )}`
+          `📧 Sending email with options: ${JSON.stringify({
+            from: mailOptions.from,
+            to: mailOptions.to,
+            subject: mailOptions.subject,
+          })}`
         );
 
-        if (assignee && assignee.mail) {
-          // Email to assignee
-          console.log(`📧 Preparing email to assignee: ${assignee.mail}`);
-
-          const emailContent = `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-              <h2 style="color: #1d4ed8;">New Issue Assigned to You</h2>
-              <p>Hello ${assignee.displayName},</p>
-              <p>An issue has been assigned to you in the Issue Management System.</p>
-              <div style="background-color: #f9fafb; padding: 15px; border-radius: 5px; margin: 15px 0;">
-                <p><strong>Issue:</strong> ${updatedIssue.subject}</p>
-                <p><strong>Category:</strong> ${updatedIssue.category}</p>
-                <p><strong>Status:</strong> ${updatedIssue.status}</p>
-              </div>
-              <p>Please log in to the system to view the details and take appropriate action.</p>
-              <p>Thank you,<br>Issue Management System</p>
-            </div>
-          `;
-
-          const mailOptions = {
-            from: '"Issue Management System" <askyourmd@nssfug.org>',
-            to: assignee.mail,
-            subject: `New Issue Assignment: ${updatedIssue.subject}`,
-            html: emailContent,
-          };
-
-          console.log(
-            `📧 Sending email with options: ${JSON.stringify({
-              from: mailOptions.from,
-              to: mailOptions.to,
-              subject: mailOptions.subject,
-            })}`
+        try {
+          const info = await transporter.sendMail(mailOptions);
+          console.log(`✅ Email sent to assignee: ${JSON.stringify(info)}`);
+          console.log(`📧 Message ID: ${info.messageId}`);
+          console.log(`📧 Response: ${info.response}`);
+        } catch (error) {
+          const sendError = error as Error;
+          console.error(
+            `❌ Failed to send email to assignee: ${assigneeData.mail}`
           );
-
-          try {
-            const info = await transporter.sendMail(mailOptions);
-            console.log(`✅ Email sent to assignee: ${JSON.stringify(info)}`);
-            console.log(`📧 Message ID: ${info.messageId}`);
-            console.log(`📧 Response: ${info.response}`);
-          } catch (sendError) {
-            console.error(
-              `❌ Failed to send email to assignee: ${assignee.mail}`
-            );
-            console.error(`❌ Error details:`, sendError);
-            if (sendError instanceof Error) {
-              console.error(`❌ Stack trace:`, sendError.stack);
-            }
-          }
-        } else {
-          console.warn(
-            `⚠️ No email address found for assignee with ID: ${assignedTo}`
-          );
-        }
-
-        // Only send email to submitter if they're not anonymous
-        if (
-          issue.submittedBy !== "anonymous" &&
-          issue.submittedBy !== "Anonymous"
-        ) {
-          // Fetch submitter details
-          const submitterUrl = `${baseUrl}/api/users/${issue.submittedBy}`;
-          console.log(`🔍 Fetching submitter details from: ${submitterUrl}`);
-
-          const submitterResponse = await fetchWithoutCertValidation(
-            submitterUrl
-          );
-          console.log(
-            `📊 Submitter API response status: ${submitterResponse.status}`
-          );
-
-          if (submitterResponse.ok) {
-            const submitterData = await submitterResponse.json();
-            const submitter = submitterData.user;
-            console.log(
-              `✅ Submitter data retrieved: ${JSON.stringify(
-                submitter
-                  ? {
-                      id: submitter.id,
-                      displayName: submitter.displayName,
-                      mail: submitter.mail,
-                    }
-                  : { error: "No user data" }
-              )}`
-            );
-
-            if (submitter && submitter.mail) {
-              // Email to submitter
-              console.log(`📧 Preparing email to submitter: ${submitter.mail}`);
-
-              const emailContent = `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-                  <h2 style="color: #1d4ed8;">Issue Assignment Update</h2>
-                  <p>Hello ${submitter.displayName},</p>
-                  <p>Your submitted issue has been assigned to a staff member.</p>
-                  <div style="background-color: #f9fafb; padding: 15px; border-radius: 5px; margin: 15px 0;">
-                    <p><strong>Issue:</strong> ${updatedIssue.subject}</p>
-                    <p><strong>Category:</strong> ${updatedIssue.category}</p>
-                    <p><strong>Status:</strong> ${updatedIssue.status}</p>
-                    <p><strong>Assigned To:</strong> ${assignee.displayName} (${assignee.mail})</p>
-                  </div>
-                  <p>The assigned staff member will work on resolving your issue.</p>
-                  <p>Thank you,<br>Issue Management System</p>
-                </div>
-              `;
-
-              const mailOptions = {
-                from: '"Issue Management System" <askyourmd@nssfug.org>',
-                to: submitter.mail,
-                subject: `Your Issue Has Been Assigned: ${updatedIssue.subject}`,
-                html: emailContent,
-              };
-
-              console.log(
-                `📧 Sending email with options: ${JSON.stringify({
-                  from: mailOptions.from,
-                  to: mailOptions.to,
-                  subject: mailOptions.subject,
-                })}`
-              );
-
-              try {
-                const info = await transporter.sendMail(mailOptions);
-                console.log(
-                  `✅ Email sent to submitter: ${JSON.stringify(info)}`
-                );
-                console.log(`📧 Message ID: ${info.messageId}`);
-                console.log(`📧 Response: ${info.response}`);
-              } catch (sendError) {
-                console.error(
-                  `❌ Failed to send email to submitter: ${submitter.mail}`
-                );
-                console.error(`❌ Error details:`, sendError);
-                if (sendError instanceof Error) {
-                  console.error(`❌ Stack trace:`, sendError.stack);
-                }
-              }
-            } else {
-              console.warn(
-                `⚠️ No email address found for submitter with ID: ${issue.submittedBy}`
-              );
-            }
-          } else {
-            console.error(
-              `❌ Failed to fetch submitter data: ${submitterResponse.status}`
-            );
-            const errorText = await submitterResponse.text();
-            console.error(`❌ Error response: ${errorText}`);
-          }
-        } else {
-          console.log(
-            `ℹ️ Skipping submitter email as the issue was submitted anonymously`
-          );
+          console.error(`❌ Error details:`, sendError);
+          console.error(`❌ Stack trace:`, sendError.stack);
         }
       } else {
-        console.error(
-          `❌ Failed to fetch assignee data: ${assigneeResponse.status}`
+        console.warn(
+          `⚠️ No email address found for assignee with ID: ${assignedTo}`
         );
-        const errorText = await assigneeResponse.text();
-        console.error(`❌ Error response: ${errorText}`);
+      }
+
+      // Send email to submitter if we have their data and they're not anonymous
+      if (
+        submitterData &&
+        submitterData.mail &&
+        issue.submittedBy !== "anonymous" &&
+        issue.submittedBy !== "Anonymous"
+      ) {
+        console.log(`📧 Preparing email to submitter: ${submitterData.mail}`);
+
+        const emailContent = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+            <h2 style="color: #1d4ed8;">Issue Assignment Update</h2>
+            <p>Hello ${submitterData.displayName},</p>
+            <p>Your submitted issue has been assigned to a staff member.</p>
+            <div style="background-color: #f9fafb; padding: 15px; border-radius: 5px; margin: 15px 0;">
+              <p><strong>Issue:</strong> ${updatedIssue.subject}</p>
+              <p><strong>Category:</strong> ${updatedIssue.category}</p>
+              <p><strong>Status:</strong> ${updatedIssue.status}</p>
+              <p><strong>Assigned To:</strong> ${
+                assigneeData?.displayName || "Staff Member"
+              } ${assigneeData?.mail ? `(${assigneeData.mail})` : ""}</p>
+            </div>
+            <p>The assigned staff member will work on resolving your issue.</p>
+            <p>Thank you,<br>Issue Management System</p>
+          </div>
+        `;
+
+        const mailOptions = {
+          from: '"Issue Management System" <askyourmd@nssfug.org>',
+          to: submitterData.mail,
+          subject: `Your Issue Has Been Assigned: ${updatedIssue.subject}`,
+          html: emailContent,
+        };
+
+        console.log(
+          `📧 Sending email with options: ${JSON.stringify({
+            from: mailOptions.from,
+            to: mailOptions.to,
+            subject: mailOptions.subject,
+          })}`
+        );
+
+        try {
+          const info = await transporter.sendMail(mailOptions);
+          console.log(`✅ Email sent to submitter: ${JSON.stringify(info)}`);
+          console.log(`📧 Message ID: ${info.messageId}`);
+          console.log(`📧 Response: ${info.response}`);
+        } catch (error) {
+          const sendError = error as Error;
+          console.error(
+            `❌ Failed to send email to submitter: ${submitterData.mail}`
+          );
+          console.error(`❌ Error details:`, sendError);
+          console.error(`❌ Stack trace:`, sendError.stack);
+        }
+      } else {
+        console.log(
+          `ℹ️ Skipping submitter email as the issue was submitted anonymously or no email available`
+        );
       }
     } catch (emailError) {
       // Log email errors but don't fail the request
-      console.error("❌ Error sending notification emails:", emailError);
-      if (emailError instanceof Error) {
-        console.error("❌ Error stack:", emailError.stack);
-      }
-      console.error("❌ Error details:", JSON.stringify(emailError, null, 2));
+      const error = emailError as Error;
+      console.error("❌ Error sending notification emails:", error);
+      console.error("❌ Error stack:", error.stack);
+      console.error("❌ Error details:", JSON.stringify(error, null, 2));
     }
 
     console.log(`✅ Assignment process completed for issue: ${id}`);
     return NextResponse.json(updatedIssue);
   } catch (error) {
-    console.error("❌ Error updating issue:", error);
-    if (error instanceof Error) {
-      console.error("❌ Error stack:", error.stack);
-    }
+    const err = error as Error;
+    console.error("❌ Error updating issue:", err);
+    console.error("❌ Error stack:", err.stack);
 
     if (error instanceof mongoose.Error.ValidationError) {
       console.error(
