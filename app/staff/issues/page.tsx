@@ -44,9 +44,14 @@ interface Issue {
 }
 
 interface SessionData {
+  id: string;
+  isLoggedIn: boolean;
   username: string;
   email: string;
-  isLoggedIn: boolean;
+  givenName: string;
+  surname: string;
+  userPrincipalName: string;
+  personnelType: string;
 }
 
 const IssueTracker = () => {
@@ -78,7 +83,7 @@ const IssueTracker = () => {
         if (issuesRes.ok) {
           const issues = await issuesRes.json();
           const userIssues = issues.filter(
-            (issue: Issue) => issue.submittedBy === session?.username
+            (issue: Issue) => issue.submittedBy === session?.id
           );
           setUserIssues(userIssues);
         }
@@ -88,7 +93,7 @@ const IssueTracker = () => {
     };
 
     fetchData();
-  }, [session?.username]);
+  }, [session?.id]);
 
   const handleSubmit = async () => {
     try {
@@ -97,7 +102,7 @@ const IssueTracker = () => {
         category: formData.category,
         content: formData.content,
         status: formData.isUrgent ? "Urgent" : "Open",
-        submittedBy: formData.isAnonymous ? "anonymous" : session?.username,
+        submittedBy: formData.isAnonymous ? "anonymous" : session?.id,
       };
 
       let response;
@@ -128,7 +133,7 @@ const IssueTracker = () => {
         if (issuesRes.ok) {
           const issues = await issuesRes.json();
           const userIssues = issues.filter(
-            (issue: Issue) => issue.submittedBy === session?.username
+            (issue: Issue) => issue.submittedBy === session?.id
           );
           setUserIssues(userIssues);
         }

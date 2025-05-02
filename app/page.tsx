@@ -16,7 +16,7 @@ import { LockIcon, UserIcon, ShieldIcon } from "lucide-react";
 const LoginForm = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [activeTab, setActiveTab] = useState("admin");
+  const [activeTab, setActiveTab] = useState("staff");
   const router = useRouter();
 
   // Import useSearchParams inside this component
@@ -93,14 +93,28 @@ const LoginForm = () => {
       className="w-full"
     >
       <TabsList className="grid w-full grid-cols-2 mb-6">
-        <TabsTrigger value="admin" className="text-sm">
-          Admin/MD Login
-        </TabsTrigger>
         <TabsTrigger value="staff" className="text-sm">
           Staff Login
         </TabsTrigger>
+        <TabsTrigger value="admin" className="text-sm">
+          MD Login
+        </TabsTrigger>
       </TabsList>
 
+      <TabsContent value="staff" className="space-y-4">
+        <div className="text-center text-white mb-4">
+          <p className="mb-2">
+            Staff members can login using their NSSF credentials
+          </p>
+        </div>
+        <Button
+          className="w-full py-5 px-4 bg-[#0078d4] text-white rounded-lg font-medium shadow-sm hover:bg-[#006cbe] transition-colors duration-200 flex items-center justify-center gap-2"
+          onClick={handleSamlLogin}
+        >
+          <ShieldIcon className="h-5 w-5" />
+          Login with Microsoft SSO
+        </Button>
+      </TabsContent>
       <TabsContent value="admin" className="space-y-4">
         <div className="space-y-4">
           <div className="relative">
@@ -130,21 +144,6 @@ const LoginForm = () => {
             Authenticate
           </Button>
         </div>
-      </TabsContent>
-
-      <TabsContent value="staff" className="space-y-4">
-        <div className="text-center text-white mb-4">
-          <p className="mb-2">
-            Staff members can login using their NSSF credentials
-          </p>
-        </div>
-        <Button
-          className="w-full py-5 px-4 bg-[#0078d4] text-white rounded-lg font-medium shadow-sm hover:bg-[#006cbe] transition-colors duration-200 flex items-center justify-center gap-2"
-          onClick={handleSamlLogin}
-        >
-          <ShieldIcon className="h-5 w-5" />
-          Login with Microsoft SSO
-        </Button>
       </TabsContent>
     </Tabs>
   );

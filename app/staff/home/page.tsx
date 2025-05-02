@@ -44,13 +44,25 @@ import { cn } from "@/lib/utils";
 import { MoreVertical, CheckSquare, Info, Star } from "lucide-react";
 import MoodTracker from "@/components/rating";
 
+// Define Azure AD user interface
+interface AzureADUser {
+  id: string;
+  displayName: string;
+  givenName?: string;
+  surname?: string;
+  mail?: string;
+  userPrincipalName: string;
+  jobTitle?: string;
+  department?: string;
+}
+
 interface Issue {
   _id: string;
   subject: string;
   category: string;
   status: string;
-  assignedTo: string;
-  submittedBy: string;
+  assignedTo: string; // This is now a user ID
+  submittedBy: string; // This is now a user ID
   content: string;
   approved: boolean;
   reslvedComment: string | null;
@@ -68,30 +80,58 @@ export default function IssuesTable() {
   const [isResolveDialogOpen, setIsResolveDialogOpen] = React.useState(false);
   const [resolveComment, setResolveComment] = React.useState("");
   const [session, setSession] = React.useState<any>(null);
+  const [users, setUsers] = React.useState<AzureADUser[]>([]);
+  const [userMap, setUserMap] = React.useState<Record<string, AzureADUser>>({});
   const itemsPerPage = 10;
   const [isRatingDialogOpen, setIsRatingDialogOpen] = React.useState(false);
 
-  // Fetch issues and session
+  // Fetch issues, session, and users
   React.useEffect(() => {
     const fetchData = async () => {
       try {
-        const [issuesResponse, sessionResponse] = await Promise.all([
-          fetch("/api/issues"),
-          fetch("/api/session"),
-        ]);
-        if (!issuesResponse.ok || !sessionResponse.ok)
-          throw new Error("Failed to fetch");
+        const [issuesResponse, sessionResponse, usersResponse] =
+          await Promise.all([
+            fetch("/api/issues"),
+            fetch("/api/session"),
+            fetch("/api/users"),
+          ]);
+
+        if (!issuesResponse.ok || !sessionResponse.ok || !usersResponse.ok) {
+          throw new Error("Failed to fetch data");
+        }
+
         const issuesData = await issuesResponse.json();
         const sessionData = await sessionResponse.json();
+        const usersData = await usersResponse.json();
+
         // Only show approved issues
         setIssues(issuesData.filter((issue: Issue) => issue.approved));
         setSession(sessionData);
+
+        // Store users and create a map for quick lookup
+        const usersList = usersData.users || [];
+        setUsers(usersList);
+
+        const userMapping: Record<string, AzureADUser> = {};
+        usersList.forEach((user: AzureADUser) => {
+          userMapping[user.id] = user;
+        });
+        setUserMap(userMapping);
+
+        console.log("Fetched users:", usersList.length);
       } catch (error) {
         console.error("Error fetching data:", error);
       }
     };
     fetchData();
   }, []);
+
+  // Get user display name from ID
+  const getUserDisplayName = (userId: string): string => {
+    if (!userId) return "Unassigned";
+    const user = userMap[userId];
+    return user ? user.displayName : userId;
+  };
 
   // Filter issues based on search query and status
   const filteredIssues = issues
@@ -257,7 +297,7 @@ export default function IssuesTable() {
                     {issue.status}
                   </span>
                 </TableCell>
-                <TableCell>{issue.assignedTo || "Unassigned"}</TableCell>
+                <TableCell>{getUserDisplayName(issue.assignedTo)}</TableCell>
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger>
@@ -273,7 +313,7 @@ export default function IssuesTable() {
                         <Info className="mr-2 h-4 w-4" />
                         Details
                       </DropdownMenuItem>
-                      {session?.username === issue.assignedTo &&
+                      {session?.id === issue.assignedTo &&
                         issue.status !== "Closed" && (
                           <DropdownMenuItem
                             onClick={() => openResolveDialog(issue)}
@@ -282,7 +322,7 @@ export default function IssuesTable() {
                             Resolve
                           </DropdownMenuItem>
                         )}
-                      {session?.username === issue.submittedBy &&
+                      {session?.id === issue.submittedBy &&
                         issue.status === "Closed" &&
                         !issue.rating && (
                           <DropdownMenuItem
@@ -348,16 +388,18 @@ export default function IssuesTable() {
                     <h3 className="text-sm font-medium text-gray-500 mb-1">
                       Submitted By
                     </h3>
-                    <p className="font-medium">{selectedIssue.submittedBy}</p>
+                    <p className="font-medium">
+                      {getUserDisplayName(selectedIssue.submittedBy)}
+                    </p>
                   </div>
-                  {/* <div>
+                  <div>
                     <h3 className="text-sm font-medium text-gray-500 mb-1">
                       Assigned To
                     </h3>
                     <p className="font-medium">
-                      {selectedIssue.assignedTo || "Unassigned"}
+                      {getUserDisplayName(selectedIssue.assignedTo)}
                     </p>
-                  </div> */}
+                  </div>
                 </div>
 
                 <div className="border-t pt-4">
