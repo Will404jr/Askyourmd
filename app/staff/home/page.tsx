@@ -216,7 +216,28 @@ export default function IssuesTable() {
     if (!selectedIssue) return;
 
     try {
-      const response = await fetch(`/api/issues/${selectedIssue._id}`, {
+      // Get resolver data (current user)
+      const resolverData = session
+        ? {
+            id: session.id,
+            displayName: session.username || session.givenName || "User",
+            mail: session.email || session.userPrincipalName,
+          }
+        : null;
+
+      // Get submitter data
+      const submitterData = selectedIssue.submittedBy
+        ? userMap[selectedIssue.submittedBy]
+        : null;
+      const submitterInfo = submitterData
+        ? {
+            id: submitterData.id,
+            displayName: submitterData.displayName,
+            mail: submitterData.mail || submitterData.userPrincipalName,
+          }
+        : null;
+
+      const response = await fetch(`/api/issues/${selectedIssue._id}/resolve`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -224,6 +245,8 @@ export default function IssuesTable() {
         body: JSON.stringify({
           status: "Closed",
           reslvedComment: resolveComment,
+          resolverData: resolverData,
+          submitterData: submitterInfo,
         }),
       });
 
@@ -248,6 +271,27 @@ export default function IssuesTable() {
     if (!selectedIssue) return;
 
     try {
+      // Get submitter data (current user)
+      const submitterData = session
+        ? {
+            id: session.id,
+            displayName: session.username || session.givenName || "User",
+            mail: session.email || session.userPrincipalName,
+          }
+        : null;
+
+      // Get resolver data (the user who resolved the issue)
+      const resolverData = selectedIssue.assignedTo
+        ? userMap[selectedIssue.assignedTo]
+        : null;
+      const resolverInfo = resolverData
+        ? {
+            id: resolverData.id,
+            displayName: resolverData.displayName,
+            mail: resolverData.mail || resolverData.userPrincipalName,
+          }
+        : null;
+
       const response = await fetch(`/api/issues/${selectedIssue._id}`, {
         method: "PUT",
         headers: {
@@ -255,6 +299,8 @@ export default function IssuesTable() {
         },
         body: JSON.stringify({
           rating: rating.charAt(0).toUpperCase() + rating.slice(1), // Capitalize first letter
+          submitterData: submitterData,
+          resolverData: resolverInfo,
         }),
       });
 

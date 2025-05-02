@@ -100,6 +100,9 @@ export default function EnhancedIssuesTable() {
   >(null);
   const [emailErrorMessage, setEmailErrorMessage] = useState<string>("");
 
+  // Add a new state variable for tracking user loading
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+
   // Fetch issues and session
   useEffect(() => {
     const fetchData = async () => {
@@ -176,9 +179,11 @@ export default function EnhancedIssuesTable() {
 
   // Fetch all users only when the assign dialog is opened
   useEffect(() => {
+    // Update the fetchAllUsers function inside the useEffect to show loading state
     const fetchAllUsers = async () => {
       if (isAssignDialogOpen) {
         try {
+          setIsLoadingUsers(true);
           const response = await fetch("/api/users");
           if (response.ok) {
             const data = await response.json();
@@ -186,6 +191,8 @@ export default function EnhancedIssuesTable() {
           }
         } catch (error) {
           console.error("Error fetching all users:", error);
+        } finally {
+          setIsLoadingUsers(false);
         }
       }
     };
@@ -652,7 +659,7 @@ export default function EnhancedIssuesTable() {
                       Assigned To
                     </h3>
                     <p className="font-medium">
-                      {getUserDisplayName(selectedIssue.assignedTo ?? "")}
+                      {getUserDisplayName(selectedIssue.assignedTo)}
                     </p>
                   </div>
                   <div>
@@ -747,8 +754,14 @@ export default function EnhancedIssuesTable() {
                 </Alert>
               )}
 
+              {/* Update the user list in the Assign User Dialog to show loading state */}
               <div className="max-h-[300px] overflow-y-auto border rounded-md">
-                {filteredUsers.length === 0 ? (
+                {isLoadingUsers ? (
+                  <div className="p-8 text-center">
+                    <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+                    <p className="mt-2 text-gray-500">Loading users...</p>
+                  </div>
+                ) : filteredUsers.length === 0 ? (
                   <div
                     key="no-users-found"
                     className="p-4 text-center text-gray-500"
