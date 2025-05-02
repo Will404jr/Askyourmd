@@ -165,7 +165,7 @@ export async function PUT(
 
               // Send the email
               await transporter.sendMail({
-                from: '"Issue Management System" <wjr46269@gmail.com>',
+                from: "askyourmd@nssfug.org",
                 to: submitter.mail,
                 subject: `Your Issue Has Been Resolved: ${updatedIssue.subject}`,
                 html: emailContent,

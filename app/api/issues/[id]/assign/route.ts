@@ -85,7 +85,7 @@ export async function PUT(
         if (assignee && assignee.mail) {
           // Email to assignee
           await transporter.sendMail({
-            from: '"Issue Management System" <wjr46269@gmail.com>',
+            from: "askyourmd@nssfug.org",
             to: assignee.mail,
             subject: `New Issue Assignment: ${updatedIssue.subject}`,
             html: `
@@ -131,7 +131,7 @@ export async function PUT(
             if (submitter && submitter.mail) {
               // Email to submitter
               await transporter.sendMail({
-                from: '"Issue Management System" <wjr46269@gmail.com>',
+                from: "askyourmd@nssfug.org",
                 to: submitter.mail,
                 subject: `Your Issue Has Been Assigned: ${updatedIssue.subject}`,
                 html: `
