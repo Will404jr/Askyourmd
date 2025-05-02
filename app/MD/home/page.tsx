@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -100,9 +100,8 @@ export default function EnhancedIssuesTable() {
   >(null);
   const [emailErrorMessage, setEmailErrorMessage] = useState<string>("");
 
-  // Fetch issues, session, and users
-  React.useEffect(() => {
-    // Modify the fetchData function in the useEffect to handle loading states
+  // Fetch issues and session
+  useEffect(() => {
     const fetchData = async () => {
       try {
         // Only set loading state on initial load, not during polling
@@ -110,35 +109,48 @@ export default function EnhancedIssuesTable() {
           setIsLoading(true);
         }
 
-        const [issuesResponse, sessionResponse, usersResponse] =
-          await Promise.all([
-            fetch("/api/issues"),
-            fetch("/api/session"),
-            fetch("/api/users"),
-          ]);
+        const [issuesResponse, sessionResponse] = await Promise.all([
+          fetch("/api/issues"),
+          fetch("/api/session"),
+        ]);
 
-        if (!issuesResponse.ok || !sessionResponse.ok || !usersResponse.ok) {
+        if (!issuesResponse.ok || !sessionResponse.ok) {
           throw new Error("Failed to fetch data");
         }
 
         const issuesData = await issuesResponse.json();
         const sessionData = await sessionResponse.json();
-        const usersData = await usersResponse.json();
 
         setIssues(issuesData);
         setSession(sessionData);
 
-        // Store users and create a map for quick lookup
-        const usersList = usersData.users || [];
-        setUsers(usersList);
+        // Fetch user details for assigned issues
+        const uniqueUserIds = new Set<string>();
 
-        const userMapping: Record<string, AzureADUser> = {};
-        usersList.forEach((user: AzureADUser) => {
-          userMapping[user.id] = user;
+        // Collect unique user IDs from issues
+        issuesData.forEach((issue: Issue) => {
+          if (issue.assignedTo) uniqueUserIds.add(issue.assignedTo);
+          if (issue.submittedBy) uniqueUserIds.add(issue.submittedBy);
         });
-        setUserMap(userMapping);
 
-        console.log("Fetched users:", usersList.length);
+        // Fetch user details for each unique ID
+        const userMapping: Record<string, AzureADUser> = {};
+
+        for (const userId of uniqueUserIds) {
+          try {
+            const userResponse = await fetch(`/api/users/${userId}`);
+            if (userResponse.ok) {
+              const userData = await userResponse.json();
+              if (userData.user) {
+                userMapping[userId] = userData.user;
+              }
+            }
+          } catch (error) {
+            console.error(`Error fetching user ${userId}:`, error);
+          }
+        }
+
+        setUserMap(userMapping);
       } catch (error) {
         console.error("Error fetching data:", error);
       } finally {
@@ -149,7 +161,6 @@ export default function EnhancedIssuesTable() {
       }
     };
 
-    // Add polling effect
     // Initial data fetch
     fetchData();
 
@@ -162,6 +173,25 @@ export default function EnhancedIssuesTable() {
     // Clean up interval on component unmount
     return () => clearInterval(intervalId);
   }, []);
+
+  // Fetch all users only when the assign dialog is opened
+  useEffect(() => {
+    const fetchAllUsers = async () => {
+      if (isAssignDialogOpen) {
+        try {
+          const response = await fetch("/api/users");
+          if (response.ok) {
+            const data = await response.json();
+            setUsers(data.users || []);
+          }
+        } catch (error) {
+          console.error("Error fetching all users:", error);
+        }
+      }
+    };
+
+    fetchAllUsers();
+  }, [isAssignDialogOpen]);
 
   // Get user display name from ID
   const getUserDisplayName = (userId: string | null): string => {
@@ -238,6 +268,22 @@ export default function EnhancedIssuesTable() {
         )
       );
 
+      // Fetch the assigned user's details to update the userMap
+      try {
+        const userResponse = await fetch(`/api/users/${userId}`);
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          if (userData.user) {
+            setUserMap((prevMap) => ({
+              ...prevMap,
+              [userId]: userData.user,
+            }));
+          }
+        }
+      } catch (error) {
+        console.error(`Error fetching assigned user ${userId}:`, error);
+      }
+
       // Set success status for email
       setEmailSendingStatus("success");
 
@@ -247,12 +293,12 @@ export default function EnhancedIssuesTable() {
         // Reset status after dialog closes
         setTimeout(() => setEmailSendingStatus(null), 500);
       }, 1500);
-    } catch (error: unknown) {
+    } catch (error) {
       console.error("Error assigning issue:", error);
       setEmailSendingStatus("error");
       setEmailErrorMessage(
-        error instanceof Error
-          ? error.message
+        error && typeof error === "object" && "message" in error
+          ? String(error.message)
           : "Failed to send email notification"
       );
     }
@@ -655,7 +701,7 @@ export default function EnhancedIssuesTable() {
           </DialogContent>
         </Dialog>
 
-        {/* Replace the Assign User Dialog with this updated version */}
+        {/* Assign User Dialog */}
         <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>

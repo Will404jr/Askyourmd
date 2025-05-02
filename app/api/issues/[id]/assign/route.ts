@@ -15,30 +15,6 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Helper function to get user details from Azure AD
-async function getUserDetails(userId: string) {
-  try {
-    // Get access token for Microsoft Graph API
-    const response = await fetch(`/api/users`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ userId }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch user details: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.user;
-  } catch (error) {
-    console.error("Error fetching user details:", error);
-    return null;
-  }
-}
-
 export async function PUT(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -72,14 +48,9 @@ export async function PUT(
     try {
       // Fetch user details for the assignee
       const assigneeResponse = await fetch(
-        `${process.env.BASE_URL || "https://askyourmd.nssfug.org"}/api/users`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ userId: assignedTo }),
-        }
+        `${
+          process.env.BASE_URL || "https://askyourmd.nssfug.org"
+        }/api/users/${assignedTo}`
       );
 
       if (assigneeResponse.ok) {
@@ -89,7 +60,7 @@ export async function PUT(
         if (assignee && assignee.mail) {
           // Email to assignee
           await transporter.sendMail({
-            from: "askyourmd@nssfug.org",
+            from: "<askyourmd@nssfug.org>",
             to: assignee.mail,
             subject: `New Issue Assignment: ${updatedIssue.subject}`,
             html: `
@@ -118,14 +89,7 @@ export async function PUT(
           const submitterResponse = await fetch(
             `${
               process.env.BASE_URL || "https://askyourmd.nssfug.org"
-            }/api/users`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ userId: issue.submittedBy }),
-            }
+            }/api/users/${issue.submittedBy}`
           );
 
           if (submitterResponse.ok) {
@@ -135,7 +99,7 @@ export async function PUT(
             if (submitter && submitter.mail) {
               // Email to submitter
               await transporter.sendMail({
-                from: "askyourmd@nssfug.org",
+                from: '"Issue Management System" <issues@example.com>',
                 to: submitter.mail,
                 subject: `Your Issue Has Been Assigned: ${updatedIssue.subject}`,
                 html: `

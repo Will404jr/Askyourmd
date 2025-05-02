@@ -5,6 +5,7 @@ import dbConnect from "@/lib/db";
 import nodemailer from "nodemailer";
 import { getSession } from "@/lib/session";
 
+// Create a transporter
 const transporter = nodemailer.createTransport({
   host: "192.168.192.160",
   port: 25,
@@ -83,14 +84,7 @@ export async function PUT(
           const submitterResponse = await fetch(
             `${
               process.env.BASE_URL || "https://askyourmd.nssfug.org"
-            }/api/users`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ userId: issue.submittedBy }),
-            }
+            }/api/users/${issue.submittedBy}`
           );
 
           if (submitterResponse.ok) {
@@ -123,14 +117,7 @@ export async function PUT(
                 const resolverResponse = await fetch(
                   `${
                     process.env.BASE_URL || "https://askyourmd.nssfug.org"
-                  }/api/users`,
-                  {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({ userId: issue.assignedTo }),
-                  }
+                  }/api/users/${issue.assignedTo}`
                 );
 
                 let resolverName = "Staff Member";
@@ -168,7 +155,7 @@ export async function PUT(
 
               // Send the email
               await transporter.sendMail({
-                from: "askyourmd@nssfug.org",
+                from: "<askyourmd@nssfug.org>",
                 to: submitter.mail,
                 subject: `Your Issue Has Been Resolved: ${updatedIssue.subject}`,
                 html: emailContent,

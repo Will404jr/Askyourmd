@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -80,7 +80,6 @@ export default function IssuesTable() {
   const [isResolveDialogOpen, setIsResolveDialogOpen] = React.useState(false);
   const [resolveComment, setResolveComment] = React.useState("");
   const [session, setSession] = React.useState<any>(null);
-  const [users, setUsers] = React.useState<AzureADUser[]>([]);
   const [userMap, setUserMap] = React.useState<Record<string, AzureADUser>>({});
   const itemsPerPage = 10;
   const [isRatingDialogOpen, setIsRatingDialogOpen] = React.useState(false);
@@ -89,8 +88,7 @@ export default function IssuesTable() {
   const [isPolling, setIsPolling] = useState(false);
 
   // Fetch issues, session, and users
-  React.useEffect(() => {
-    // Modify the fetchData function in the useEffect to handle loading states
+  useEffect(() => {
     const fetchData = async () => {
       try {
         // Only set loading state on initial load, not during polling
@@ -98,36 +96,52 @@ export default function IssuesTable() {
           setIsLoading(true);
         }
 
-        const [issuesResponse, sessionResponse, usersResponse] =
-          await Promise.all([
-            fetch("/api/issues"),
-            fetch("/api/session"),
-            fetch("/api/users"),
-          ]);
+        const [issuesResponse, sessionResponse] = await Promise.all([
+          fetch("/api/issues"),
+          fetch("/api/session"),
+        ]);
 
-        if (!issuesResponse.ok || !sessionResponse.ok || !usersResponse.ok) {
+        if (!issuesResponse.ok || !sessionResponse.ok) {
           throw new Error("Failed to fetch data");
         }
 
         const issuesData = await issuesResponse.json();
         const sessionData = await sessionResponse.json();
-        const usersData = await usersResponse.json();
 
         // Only show approved issues
-        setIssues(issuesData.filter((issue: Issue) => issue.approved));
+        const approvedIssues = issuesData.filter(
+          (issue: Issue) => issue.approved
+        );
+        setIssues(approvedIssues);
         setSession(sessionData);
 
-        // Store users and create a map for quick lookup
-        const usersList = usersData.users || [];
-        setUsers(usersList);
+        // Fetch user details for assigned issues
+        const uniqueUserIds = new Set<string>();
 
-        const userMapping: Record<string, AzureADUser> = {};
-        usersList.forEach((user: AzureADUser) => {
-          userMapping[user.id] = user;
+        // Collect unique user IDs from issues
+        approvedIssues.forEach((issue: Issue) => {
+          if (issue.assignedTo) uniqueUserIds.add(issue.assignedTo);
+          if (issue.submittedBy) uniqueUserIds.add(issue.submittedBy);
         });
-        setUserMap(userMapping);
 
-        console.log("Fetched users:", usersList.length);
+        // Fetch user details for each unique ID
+        const userMapping: Record<string, AzureADUser> = {};
+
+        for (const userId of uniqueUserIds) {
+          try {
+            const userResponse = await fetch(`/api/users/${userId}`);
+            if (userResponse.ok) {
+              const userData = await userResponse.json();
+              if (userData.user) {
+                userMapping[userId] = userData.user;
+              }
+            }
+          } catch (error) {
+            console.error(`Error fetching user ${userId}:`, error);
+          }
+        }
+
+        setUserMap(userMapping);
       } catch (error) {
         console.error("Error fetching data:", error);
       } finally {
@@ -138,7 +152,6 @@ export default function IssuesTable() {
       }
     };
 
-    // Update the polling setup to properly set isPolling
     // Initial data fetch
     fetchData();
 
