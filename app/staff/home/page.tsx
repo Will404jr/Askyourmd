@@ -138,12 +138,13 @@ export default function IssuesTable() {
       }
     };
 
-    // Add polling effect
+    // Update the polling setup to properly set isPolling
     // Initial data fetch
     fetchData();
 
     // Set up polling every 5 seconds
     const intervalId = setInterval(() => {
+      setIsPolling(true); // Set polling to true before fetch
       fetchData();
     }, 5000);
 
@@ -298,7 +299,7 @@ export default function IssuesTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
+            {isLoading && !isPolling ? (
               <TableRow>
                 <TableCell
                   colSpan={5}

@@ -145,6 +145,7 @@ export default function EnhancedIssuesTable() {
 
     // Set up polling every 5 seconds
     const intervalId = setInterval(() => {
+      setIsPolling(true); // Set polling to true before fetch
       fetchData();
     }, 5000);
 
@@ -421,7 +422,7 @@ export default function EnhancedIssuesTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
+            {isLoading && !isPolling ? (
               <TableRow>
                 <TableCell
                   colSpan={5}
