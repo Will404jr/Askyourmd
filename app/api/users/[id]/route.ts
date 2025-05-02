@@ -28,7 +28,7 @@ async function fetchUserById(userId: string, accessToken: string) {
 
     const url = `https://graph.microsoft.com/v1.0/users/${userId}?$select=id,displayName,givenName,surname,mail,userPrincipalName,jobTitle,department,officeLocation,mobilePhone,businessPhones`;
 
-    console.log(`Fetching user details for ID: ${userId}`);
+    // console.log(`Fetching user details for ID: ${userId}`);
 
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -65,7 +65,7 @@ export async function GET(
       );
     }
 
-    console.log(`Getting user details for ID: ${userId}`);
+    // console.log(`Getting user details for ID: ${userId}`);
 
     // Get access token for Microsoft Graph API
     const accessToken = await getAccessToken();

@@ -34,11 +34,11 @@ const sessionOptions = {
 
 export async function getSession() {
   try {
-    console.log("Getting session with options:", {
-      cookieName: sessionOptions.cookieName,
-      secure: sessionOptions.cookieOptions.secure,
-      sameSite: sessionOptions.cookieOptions.sameSite,
-    });
+    // console.log("Getting session with options:", {
+    //   cookieName: sessionOptions.cookieName,
+    //   secure: sessionOptions.cookieOptions.secure,
+    //   sameSite: sessionOptions.cookieOptions.sameSite,
+    // });
 
     const cookieStore = await cookies();
     const session = await getIronSession<SessionData>(
@@ -46,12 +46,12 @@ export async function getSession() {
       sessionOptions
     );
 
-    console.log("Session retrieved:", {
-      isLoggedIn: session.isLoggedIn,
-      username: session.username,
-      personnelType: session.personnelType,
-      expiresAt: session.expiresAt,
-    });
+    // console.log("Session retrieved:", {
+    //   isLoggedIn: session.isLoggedIn,
+    //   username: session.username,
+    //   personnelType: session.personnelType,
+    //   expiresAt: session.expiresAt,
+    // });
 
     if (!session.isLoggedIn) {
       session.isLoggedIn = false;
