@@ -93,7 +93,7 @@ export default function IssuesTable() {
     // Modify the fetchData function in the useEffect to handle loading states
     const fetchData = async () => {
       try {
-        // Only show the main loading indicator on initial load
+        // Only set loading state on initial load, not during polling
         if (!isPolling) {
           setIsLoading(true);
         }
@@ -131,8 +131,10 @@ export default function IssuesTable() {
       } catch (error) {
         console.error("Error fetching data:", error);
       } finally {
-        setIsLoading(false);
-        setIsPolling(false);
+        // Only update loading state for initial load
+        if (!isPolling) {
+          setIsLoading(false);
+        }
       }
     };
 
@@ -142,7 +144,6 @@ export default function IssuesTable() {
 
     // Set up polling every 5 seconds
     const intervalId = setInterval(() => {
-      setIsPolling(true);
       fetchData();
     }, 5000);
 
@@ -262,20 +263,6 @@ export default function IssuesTable() {
 
   return (
     <main className="container mx-auto px-4 py-8 w-[90%]">
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
-          <div className="flex flex-col items-center">
-            <div className="h-12 w-12 rounded-full border-4 border-t-blue-600 border-b-blue-600 border-l-gray-200 border-r-gray-200 animate-spin"></div>
-            <p className="mt-4 text-gray-600 font-medium">Loading issues...</p>
-          </div>
-        </div>
-      )}
-
-      {isPolling && !isLoading && (
-        <div className="h-1 bg-blue-200 relative overflow-hidden mb-2 rounded-full">
-          <div className="absolute top-0 left-0 h-full bg-blue-600 animate-pulse w-full"></div>
-        </div>
-      )}
       <div className="w-full space-y-4 bg-white p-6 rounded-lg shadow-lg">
         <div className="w-full bg-gradient-to-r from-blue-600 to-green-400 h-1 absolute top-0 left-0 right-0" />
         <div className="flex items-center justify-between">
@@ -311,73 +298,93 @@ export default function IssuesTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedIssues.map((issue) => (
-              <TableRow key={issue._id}>
-                <TableCell className="font-medium">{issue.subject}</TableCell>
-                <TableCell>{issue.category}</TableCell>
-                <TableCell>
-                  <span
-                    className={cn(
-                      "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium",
-                      {
-                        "bg-yellow-100 text-yellow-700":
-                          issue.status === "Pending",
-                        "bg-red-100 text-red-700":
-                          issue.status === "Overdue" ||
-                          issue.status === "Urgent",
-                        "bg-green-100 text-green-700":
-                          issue.status === "Closed",
-                        "bg-blue-100 text-blue-700": issue.status === "Open",
-                        "animate-pulse": issue.status === "Urgent",
-                      }
-                    )}
-                  >
-                    {issue.status}
-                  </span>
-                </TableCell>
-                <TableCell>{getUserDisplayName(issue.assignedTo)}</TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger>
-                      <MoreVertical className="h-5 w-5" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setSelectedIssue(issue);
-                          setIsDialogOpen(true);
-                        }}
-                      >
-                        <Info className="mr-2 h-4 w-4" />
-                        Details
-                      </DropdownMenuItem>
-                      {session?.id === issue.assignedTo &&
-                        issue.status !== "Closed" && (
-                          <DropdownMenuItem
-                            onClick={() => openResolveDialog(issue)}
-                          >
-                            <CheckSquare className="mr-2 h-4 w-4" />
-                            Resolve
-                          </DropdownMenuItem>
-                        )}
-                      {session?.id === issue.submittedBy &&
-                        issue.status === "Closed" &&
-                        !issue.rating && (
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setSelectedIssue(issue);
-                              setIsRatingDialogOpen(true);
-                            }}
-                          >
-                            <Star className="mr-2 h-4 w-4" />
-                            Rate
-                          </DropdownMenuItem>
-                        )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+            {isLoading ? (
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  className="text-center py-8 text-gray-500"
+                >
+                  Loading issues...
                 </TableCell>
               </TableRow>
-            ))}
+            ) : paginatedIssues.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  className="text-center py-8 text-gray-500"
+                >
+                  No issues found.
+                </TableCell>
+              </TableRow>
+            ) : (
+              paginatedIssues.map((issue) => (
+                <TableRow key={issue._id}>
+                  <TableCell className="font-medium">{issue.subject}</TableCell>
+                  <TableCell>{issue.category}</TableCell>
+                  <TableCell>
+                    <span
+                      className={cn(
+                        "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium",
+                        {
+                          "bg-yellow-100 text-yellow-700":
+                            issue.status === "Pending",
+                          "bg-red-100 text-red-700":
+                            issue.status === "Overdue" ||
+                            issue.status === "Urgent",
+                          "bg-green-100 text-green-700":
+                            issue.status === "Closed",
+                          "bg-blue-100 text-blue-700": issue.status === "Open",
+                          "animate-pulse": issue.status === "Urgent",
+                        }
+                      )}
+                    >
+                      {issue.status}
+                    </span>
+                  </TableCell>
+                  <TableCell>{getUserDisplayName(issue.assignedTo)}</TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger>
+                        <MoreVertical className="h-5 w-5" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setSelectedIssue(issue);
+                            setIsDialogOpen(true);
+                          }}
+                        >
+                          <Info className="mr-2 h-4 w-4" />
+                          Details
+                        </DropdownMenuItem>
+                        {session?.id === issue.assignedTo &&
+                          issue.status !== "Closed" && (
+                            <DropdownMenuItem
+                              onClick={() => openResolveDialog(issue)}
+                            >
+                              <CheckSquare className="mr-2 h-4 w-4" />
+                              Resolve
+                            </DropdownMenuItem>
+                          )}
+                        {session?.id === issue.submittedBy &&
+                          issue.status === "Closed" &&
+                          !issue.rating && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedIssue(issue);
+                                setIsRatingDialogOpen(true);
+                              }}
+                            >
+                              <Star className="mr-2 h-4 w-4" />
+                              Rate
+                            </DropdownMenuItem>
+                          )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
 

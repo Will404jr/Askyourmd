@@ -95,7 +95,7 @@ export default function EnhancedIssuesTable() {
     // Modify the fetchData function in the useEffect to handle loading states
     const fetchData = async () => {
       try {
-        // Only show the main loading indicator on initial load
+        // Only set loading state on initial load, not during polling
         if (!isPolling) {
           setIsLoading(true);
         }
@@ -132,8 +132,10 @@ export default function EnhancedIssuesTable() {
       } catch (error) {
         console.error("Error fetching data:", error);
       } finally {
-        setIsLoading(false);
-        setIsPolling(false);
+        // Only update loading state for initial load
+        if (!isPolling) {
+          setIsLoading(false);
+        }
       }
     };
 
@@ -143,7 +145,6 @@ export default function EnhancedIssuesTable() {
 
     // Set up polling every 5 seconds
     const intervalId = setInterval(() => {
-      setIsPolling(true);
       fetchData();
     }, 5000);
 
@@ -152,7 +153,7 @@ export default function EnhancedIssuesTable() {
   }, []);
 
   // Get user display name from ID
-  const getUserDisplayName = (userId: string): string => {
+  const getUserDisplayName = (userId: string | null): string => {
     if (!userId) return "Unassigned";
     const user = userMap[userId];
     return user ? user.displayName : userId;
@@ -370,21 +371,8 @@ export default function EnhancedIssuesTable() {
           </CardContent>
         </Card>
       </div>
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
-          <div className="flex flex-col items-center">
-            <div className="h-12 w-12 rounded-full border-4 border-t-blue-600 border-b-blue-600 border-l-gray-200 border-r-gray-200 animate-spin"></div>
-            <p className="mt-4 text-gray-600 font-medium">Loading issues...</p>
-          </div>
-        </div>
-      )}
 
       <div className="bg-white p-6 rounded-lg shadow-lg space-y-4">
-        {isPolling && !isLoading && (
-          <div className="h-1 bg-blue-200 relative overflow-hidden mb-2 rounded-full">
-            <div className="absolute top-0 left-0 h-full bg-blue-600 animate-pulse w-full"></div>
-          </div>
-        )}
         <div className="flex items-center justify-between">
           <Input
             placeholder="Search issues..."
@@ -433,82 +421,98 @@ export default function EnhancedIssuesTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedIssues.map((issue) => (
-              <TableRow
-                key={issue._id}
-                className={cn(issue.status === "Urgent" && "bg-red-50/50")}
-              >
-                <TableCell className="font-medium">{issue.subject}</TableCell>
-                <TableCell>{issue.category}</TableCell>
-                <TableCell>
-                  <span
-                    className={cn(
-                      "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium",
-                      {
-                        "bg-yellow-100 text-yellow-700":
-                          issue.status === "Pending",
-                        "bg-red-100 text-red-700": issue.status === "Overdue",
-                        "bg-green-100 text-green-700":
-                          issue.status === "Closed",
-                        "bg-blue-100 text-blue-700": issue.status === "Open",
-                        "bg-red-100 text-red-700 animate-pulse":
-                          issue.status === "Urgent",
-                      }
-                    )}
-                  >
-                    {issue.status}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  {issue.assignedTo !== null
-                    ? getUserDisplayName(issue.assignedTo)
-                    : getUserDisplayName("")}
-                </TableCell>
-
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger>
-                      <MoreVertical className="h-5 w-5" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setSelectedIssue(issue);
-                          setIsDialogOpen(true);
-                        }}
-                      >
-                        <Info className="mr-2 h-4 w-4" />
-                        Details
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setSelectedIssue(issue);
-                          setIsAssignDialogOpen(true);
-                        }}
-                      >
-                        <UserPlus className="mr-2 h-4 w-4" />
-                        Assign
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleApprove(issue._id)}
-                        disabled={issue.approved}
-                      >
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        {issue.approved ? "Approved" : "Approve"}
-                      </DropdownMenuItem>
-                      {canResolveIssue(issue) && (
-                        <DropdownMenuItem
-                          onClick={() => openResolveDialog(issue)}
-                        >
-                          <CheckCircle className="mr-2 h-4 w-4" />
-                          Resolve
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+            {isLoading ? (
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  className="text-center py-8 text-gray-500"
+                >
+                  Loading issues...
                 </TableCell>
               </TableRow>
-            ))}
+            ) : paginatedIssues.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  className="text-center py-8 text-gray-500"
+                >
+                  No issues found.
+                </TableCell>
+              </TableRow>
+            ) : (
+              paginatedIssues.map((issue) => (
+                <TableRow
+                  key={issue._id}
+                  className={cn(issue.status === "Urgent" && "bg-red-50/50")}
+                >
+                  <TableCell className="font-medium">{issue.subject}</TableCell>
+                  <TableCell>{issue.category}</TableCell>
+                  <TableCell>
+                    <span
+                      className={cn(
+                        "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium",
+                        {
+                          "bg-yellow-100 text-yellow-700":
+                            issue.status === "Pending",
+                          "bg-red-100 text-red-700": issue.status === "Overdue",
+                          "bg-green-100 text-green-700":
+                            issue.status === "Closed",
+                          "bg-blue-100 text-blue-700": issue.status === "Open",
+                          "bg-red-100 text-red-700 animate-pulse":
+                            issue.status === "Urgent",
+                        }
+                      )}
+                    >
+                      {issue.status}
+                    </span>
+                  </TableCell>
+                  <TableCell>{getUserDisplayName(issue.assignedTo)}</TableCell>
+
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger>
+                        <MoreVertical className="h-5 w-5" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setSelectedIssue(issue);
+                            setIsDialogOpen(true);
+                          }}
+                        >
+                          <Info className="mr-2 h-4 w-4" />
+                          Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setSelectedIssue(issue);
+                            setIsAssignDialogOpen(true);
+                          }}
+                        >
+                          <UserPlus className="mr-2 h-4 w-4" />
+                          Assign
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleApprove(issue._id)}
+                          disabled={issue.approved}
+                        >
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                          {issue.approved ? "Approved" : "Approve"}
+                        </DropdownMenuItem>
+                        {canResolveIssue(issue) && (
+                          <DropdownMenuItem
+                            onClick={() => openResolveDialog(issue)}
+                          >
+                            <CheckCircle className="mr-2 h-4 w-4" />
+                            Resolve
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
 
@@ -565,9 +569,7 @@ export default function EnhancedIssuesTable() {
                       Assigned To
                     </h3>
                     <p className="font-medium">
-                      {selectedIssue.assignedTo !== null
-                        ? getUserDisplayName(selectedIssue.assignedTo)
-                        : getUserDisplayName("")}
+                      {getUserDisplayName(selectedIssue.assignedTo)}
                     </p>
                   </div>
                   <div>
