@@ -9,6 +9,10 @@ const transporter = nodemailer.createTransport({
   host: "192.168.192.160",
   port: 25,
   secure: false,
+  tls: {
+    // Do not fail on invalid certificates
+    rejectUnauthorized: false,
+  },
 });
 
 // Helper function to get user details from Azure AD

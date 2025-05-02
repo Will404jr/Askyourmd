@@ -5,11 +5,14 @@ import dbConnect from "@/lib/db";
 import nodemailer from "nodemailer";
 import { getSession } from "@/lib/session";
 
-// Create a transporter
 const transporter = nodemailer.createTransport({
   host: "192.168.192.160",
   port: 25,
   secure: false,
+  tls: {
+    // Do not fail on invalid certificates
+    rejectUnauthorized: false,
+  },
 });
 
 export async function GET(

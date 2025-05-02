@@ -10,6 +10,10 @@ const transporter = nodemailer.createTransport({
   host: "192.168.192.160",
   port: 25,
   secure: false,
+  tls: {
+    // Do not fail on invalid certificates
+    rejectUnauthorized: false,
+  },
 });
 
 export async function PUT(
