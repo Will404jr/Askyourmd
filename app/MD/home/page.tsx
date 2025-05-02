@@ -44,6 +44,10 @@ import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
+// First, add imports for Alert components at the top of the file with the other imports
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { CheckCircle2, AlertCircle } from "lucide-react";
+
 // Define Azure AD user interface
 interface AzureADUser {
   id: string;
@@ -89,6 +93,12 @@ export default function EnhancedIssuesTable() {
   // Add loading state at the top of the component
   const [isLoading, setIsLoading] = useState(true);
   const [isPolling, setIsPolling] = useState(false);
+
+  // Add these state variables in the component, after the other state declarations
+  const [emailSendingStatus, setEmailSendingStatus] = useState<
+    "success" | "error" | null
+  >(null);
+  const [emailErrorMessage, setEmailErrorMessage] = useState<string>("");
 
   // Fetch issues, session, and users
   React.useEffect(() => {
@@ -196,10 +206,11 @@ export default function EnhancedIssuesTable() {
   // Check if current user is an admin
   const isAdmin = session?.personnelType === "Md";
 
-  // Handle issue assignment
+  // Replace the handleAssign function with this updated version
   const handleAssign = async (issueId: string, userId: string) => {
     try {
       console.log("Assigning Issue:", { issueId, userId });
+      setEmailSendingStatus(null);
 
       const response = await fetch(`/api/issues/${issueId}/assign`, {
         method: "PUT",
@@ -227,9 +238,23 @@ export default function EnhancedIssuesTable() {
         )
       );
 
-      setIsAssignDialogOpen(false);
-    } catch (error) {
+      // Set success status for email
+      setEmailSendingStatus("success");
+
+      // Close the dialog after a short delay to show the success message
+      setTimeout(() => {
+        setIsAssignDialogOpen(false);
+        // Reset status after dialog closes
+        setTimeout(() => setEmailSendingStatus(null), 500);
+      }, 1500);
+    } catch (error: unknown) {
       console.error("Error assigning issue:", error);
+      setEmailSendingStatus("error");
+      setEmailErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to send email notification"
+      );
     }
   };
 
@@ -630,9 +655,9 @@ export default function EnhancedIssuesTable() {
           </DialogContent>
         </Dialog>
 
-        {/* Assign User Dialog */}
+        {/* Replace the Assign User Dialog with this updated version */}
         <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Assign Issue</DialogTitle>
             </DialogHeader>
@@ -643,6 +668,28 @@ export default function EnhancedIssuesTable() {
                 onChange={(e) => setUserSearchQuery(e.target.value)}
                 className="w-full"
               />
+
+              {emailSendingStatus === "success" && (
+                <Alert className="bg-green-50 border-green-200">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <AlertTitle className="text-green-800">Success</AlertTitle>
+                  <AlertDescription className="text-green-700">
+                    Issue assigned successfully. Email notification has been
+                    sent to the user.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {emailSendingStatus === "error" && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>
+                    {emailErrorMessage || "Failed to send email notification"}
+                  </AlertDescription>
+                </Alert>
+              )}
+
               <div className="max-h-[300px] overflow-y-auto border rounded-md">
                 {filteredUsers.length === 0 ? (
                   <div
