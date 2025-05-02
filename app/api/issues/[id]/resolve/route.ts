@@ -7,13 +7,9 @@ import nodemailer from "nodemailer";
 
 // Create a transporter
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
+  host: "192.168.192.160",
+  port: 25,
   secure: false,
-  auth: {
-    user: "wjr46269@gmail.com",
-    pass: "sqdqsloslcftavja",
-  },
 });
 
 export async function PUT(
