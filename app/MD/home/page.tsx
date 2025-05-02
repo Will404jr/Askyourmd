@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import {
   Table,
   TableBody,
@@ -86,11 +86,20 @@ export default function EnhancedIssuesTable() {
   const [isResolveDialogOpen, setIsResolveDialogOpen] = React.useState(false);
   const [resolveComment, setResolveComment] = React.useState("");
   const [session, setSession] = React.useState<any>(null);
+  // Add loading state at the top of the component
+  const [isLoading, setIsLoading] = useState(true);
+  const [isPolling, setIsPolling] = useState(false);
 
   // Fetch issues, session, and users
   React.useEffect(() => {
+    // Modify the fetchData function in the useEffect to handle loading states
     const fetchData = async () => {
       try {
+        // Only show the main loading indicator on initial load
+        if (!isPolling) {
+          setIsLoading(true);
+        }
+
         const [issuesResponse, sessionResponse, usersResponse] =
           await Promise.all([
             fetch("/api/issues"),
@@ -122,13 +131,28 @@ export default function EnhancedIssuesTable() {
         console.log("Fetched users:", usersList.length);
       } catch (error) {
         console.error("Error fetching data:", error);
+      } finally {
+        setIsLoading(false);
+        setIsPolling(false);
       }
     };
+
+    // Add polling effect
+    // Initial data fetch
     fetchData();
+
+    // Set up polling every 5 seconds
+    const intervalId = setInterval(() => {
+      setIsPolling(true);
+      fetchData();
+    }, 5000);
+
+    // Clean up interval on component unmount
+    return () => clearInterval(intervalId);
   }, []);
 
   // Get user display name from ID
-  const getUserDisplayName = (userId: string | null): string => {
+  const getUserDisplayName = (userId: string): string => {
     if (!userId) return "Unassigned";
     const user = userMap[userId];
     return user ? user.displayName : userId;
@@ -310,7 +334,7 @@ export default function EnhancedIssuesTable() {
   };
 
   return (
-    <main className="container mx-auto px-4 py-8 w-[90%] space-y-6">
+    <main className="container mx-auto px-4 py-8 w-[90%] space-y-6 relative">
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
@@ -346,8 +370,21 @@ export default function EnhancedIssuesTable() {
           </CardContent>
         </Card>
       </div>
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
+          <div className="flex flex-col items-center">
+            <div className="h-12 w-12 rounded-full border-4 border-t-blue-600 border-b-blue-600 border-l-gray-200 border-r-gray-200 animate-spin"></div>
+            <p className="mt-4 text-gray-600 font-medium">Loading issues...</p>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white p-6 rounded-lg shadow-lg space-y-4">
+        {isPolling && !isLoading && (
+          <div className="h-1 bg-blue-200 relative overflow-hidden mb-2 rounded-full">
+            <div className="absolute top-0 left-0 h-full bg-blue-600 animate-pulse w-full"></div>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <Input
             placeholder="Search issues..."
@@ -422,7 +459,11 @@ export default function EnhancedIssuesTable() {
                     {issue.status}
                   </span>
                 </TableCell>
-                <TableCell>{getUserDisplayName(issue.assignedTo)}</TableCell>
+                <TableCell>
+                  {issue.assignedTo !== null
+                    ? getUserDisplayName(issue.assignedTo)
+                    : getUserDisplayName("")}
+                </TableCell>
 
                 <TableCell>
                   <DropdownMenu>
@@ -524,7 +565,9 @@ export default function EnhancedIssuesTable() {
                       Assigned To
                     </h3>
                     <p className="font-medium">
-                      {getUserDisplayName(selectedIssue.assignedTo)}
+                      {selectedIssue.assignedTo !== null
+                        ? getUserDisplayName(selectedIssue.assignedTo)
+                        : getUserDisplayName("")}
                     </p>
                   </div>
                   <div>
@@ -629,9 +672,9 @@ export default function EnhancedIssuesTable() {
                             <p className="text-sm font-medium text-gray-900 truncate hover:text-blue-600">
                               {user.displayName}
                             </p>
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            {/* <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                               {user.department || "Staff"}
-                            </span>
+                            </span> */}
                           </div>
                           <p className="text-sm text-gray-500 truncate">
                             {user.mail || user.userPrincipalName}

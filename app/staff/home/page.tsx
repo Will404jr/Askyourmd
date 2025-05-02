@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import {
   Table,
   TableBody,
@@ -84,11 +84,20 @@ export default function IssuesTable() {
   const [userMap, setUserMap] = React.useState<Record<string, AzureADUser>>({});
   const itemsPerPage = 10;
   const [isRatingDialogOpen, setIsRatingDialogOpen] = React.useState(false);
+  // Add loading state at the top of the component
+  const [isLoading, setIsLoading] = useState(true);
+  const [isPolling, setIsPolling] = useState(false);
 
   // Fetch issues, session, and users
   React.useEffect(() => {
+    // Modify the fetchData function in the useEffect to handle loading states
     const fetchData = async () => {
       try {
+        // Only show the main loading indicator on initial load
+        if (!isPolling) {
+          setIsLoading(true);
+        }
+
         const [issuesResponse, sessionResponse, usersResponse] =
           await Promise.all([
             fetch("/api/issues"),
@@ -121,9 +130,24 @@ export default function IssuesTable() {
         console.log("Fetched users:", usersList.length);
       } catch (error) {
         console.error("Error fetching data:", error);
+      } finally {
+        setIsLoading(false);
+        setIsPolling(false);
       }
     };
+
+    // Add polling effect
+    // Initial data fetch
     fetchData();
+
+    // Set up polling every 5 seconds
+    const intervalId = setInterval(() => {
+      setIsPolling(true);
+      fetchData();
+    }, 5000);
+
+    // Clean up interval on component unmount
+    return () => clearInterval(intervalId);
   }, []);
 
   // Get user display name from ID
@@ -238,6 +262,20 @@ export default function IssuesTable() {
 
   return (
     <main className="container mx-auto px-4 py-8 w-[90%]">
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
+          <div className="flex flex-col items-center">
+            <div className="h-12 w-12 rounded-full border-4 border-t-blue-600 border-b-blue-600 border-l-gray-200 border-r-gray-200 animate-spin"></div>
+            <p className="mt-4 text-gray-600 font-medium">Loading issues...</p>
+          </div>
+        </div>
+      )}
+
+      {isPolling && !isLoading && (
+        <div className="h-1 bg-blue-200 relative overflow-hidden mb-2 rounded-full">
+          <div className="absolute top-0 left-0 h-full bg-blue-600 animate-pulse w-full"></div>
+        </div>
+      )}
       <div className="w-full space-y-4 bg-white p-6 rounded-lg shadow-lg">
         <div className="w-full bg-gradient-to-r from-blue-600 to-green-400 h-1 absolute top-0 left-0 right-0" />
         <div className="flex items-center justify-between">

@@ -66,7 +66,7 @@ export async function PUT(
       ) {
         // Fetch submitter details
         const submitterResponse = await fetch(
-          `${process.env.BASE_URL || "http://localhost:3001"}/api/users`,
+          `${process.env.BASE_URL || "https://askyourmd.nssfug.org"}/api/users`,
           {
             method: "POST",
             headers: {
@@ -104,7 +104,9 @@ export async function PUT(
             } else {
               // Fetch resolver details
               const resolverResponse = await fetch(
-                `${process.env.BASE_URL || "http://localhost:3001"}/api/users`,
+                `${
+                  process.env.BASE_URL || "https://askyourmd.nssfug.org"
+                }/api/users`,
                 {
                   method: "POST",
                   headers: {
