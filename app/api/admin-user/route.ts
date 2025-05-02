@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { users } from "@/lib/admin";
+import { users } from "@/lib/adminlogin";
 
 export async function GET(req: NextRequest) {
   // Return the admin user (MD)

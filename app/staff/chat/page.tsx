@@ -9,22 +9,18 @@ import { Send } from "lucide-react";
 import Pusher from "pusher-js";
 import { useRouter } from "next/navigation";
 
-// Define user interfaces based on the new structure
-interface AdminUser {
+// Define user interfaces based on Azure AD
+interface AzureADUser {
   id: string;
-  username: string;
-  email: string;
-  personnelType: "Md";
+  displayName: string;
+  givenName?: string;
+  surname?: string;
+  mail?: string;
+  userPrincipalName: string;
+  jobTitle?: string;
+  department?: string;
+  personnelType?: string;
 }
-
-interface StaffUser {
-  id: string; // This will be the uid from LDAP
-  username: string; // This will be the cn from LDAP
-  email: string; // This will be the mail from LDAP
-  personnelType: "Staff";
-}
-
-type User = AdminUser | StaffUser;
 
 interface UnreadCount {
   _id: string;
@@ -33,10 +29,12 @@ interface UnreadCount {
 
 const ChatInterface = () => {
   const [message, setMessage] = useState("");
-  const [selectedContact, setSelectedContact] = useState<User | null>(null);
+  const [selectedContact, setSelectedContact] = useState<AzureADUser | null>(
+    null
+  );
   const [searchQuery, setSearchQuery] = useState("");
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
+  const [currentUser, setCurrentUser] = useState<AzureADUser | null>(null);
+  const [adminUser, setAdminUser] = useState<AzureADUser | null>(null);
   const [messages, setMessages] = useState<{
     [key: string]: Array<{
       id: number;
@@ -73,17 +71,20 @@ const ChatInterface = () => {
     const fetchSession = async () => {
       const response = await fetch("/api/session");
       const session = await response.json();
-      if (session.isLoggedIn && session.username) {
+      if (session.isLoggedIn) {
         // Create user object from session data
-        const user: User = {
+        const user: AzureADUser = {
           id: session.id,
-          username: session.username,
-          email: session.email,
+          displayName: session.username || session.givenName || "User",
+          givenName: session.givenName,
+          surname: session.surname,
+          mail: session.email,
+          userPrincipalName: session.userPrincipalName || session.email,
           personnelType: session.personnelType,
         };
         setCurrentUser(user);
       } else {
-        router.push("/login");
+        router.push("/");
       }
     };
     fetchSession();
@@ -93,15 +94,27 @@ const ChatInterface = () => {
   useEffect(() => {
     const fetchAdminUser = async () => {
       try {
-        const response = await fetch("/api/admin-user");
+        // Find an admin user from the users API
+        const response = await fetch("/api/users");
         if (response.ok) {
-          const admin = await response.json();
-          setAdminUser({
-            id: admin.id,
-            username: admin.username,
-            email: admin.email,
-            personnelType: "Md",
-          });
+          const data = await response.json();
+          const users = data.users || [];
+
+          // Look for a user with Management department or Managing Director job title
+          const admin = users.find(
+            (user: AzureADUser) =>
+              user.department === "Management" ||
+              user.jobTitle === "Managing Director"
+          );
+
+          if (admin) {
+            setAdminUser({
+              ...admin,
+              personnelType: "Md",
+            });
+          } else {
+            console.warn("No admin user found in Azure AD users");
+          }
         }
       } catch (error) {
         console.error("Error fetching admin user:", error);
@@ -134,8 +147,8 @@ const ChatInterface = () => {
                 id: msg._id,
                 sender:
                   msg.senderId === currentUser.id
-                    ? currentUser.username
-                    : selectedContact.username,
+                    ? currentUser.displayName
+                    : selectedContact.displayName,
                 content: msg.message,
                 timestamp: new Date(msg.timestamp).toLocaleTimeString(),
                 isSent: msg.senderId === currentUser.id,
@@ -163,34 +176,37 @@ const ChatInterface = () => {
     });
 
     const channel = pusher.subscribe(`private-user-${currentUser.id}`);
-    channel.bind("new-message", (data: { sender: User; message: string }) => {
-      setMessages((prevMessages) => {
-        const updatedMessages = {
-          ...prevMessages,
-          [data.sender.id]: [
-            ...(prevMessages[data.sender.id] || []),
-            {
-              id: Date.now(),
-              sender: data.sender.username,
-              content: data.message,
-              timestamp: new Date().toLocaleTimeString(),
-              isSent: false,
-            },
-          ],
-        };
+    channel.bind(
+      "new-message",
+      (data: { sender: AzureADUser; message: string }) => {
+        setMessages((prevMessages) => {
+          const updatedMessages = {
+            ...prevMessages,
+            [data.sender.id]: [
+              ...(prevMessages[data.sender.id] || []),
+              {
+                id: Date.now(),
+                sender: data.sender.displayName,
+                content: data.message,
+                timestamp: new Date().toLocaleTimeString(),
+                isSent: false,
+              },
+            ],
+          };
 
-        // Schedule a scroll to bottom after state update
-        setTimeout(scrollToBottom, 0);
+          // Schedule a scroll to bottom after state update
+          setTimeout(scrollToBottom, 0);
 
-        return updatedMessages;
-      });
+          return updatedMessages;
+        });
 
-      // Update unread count for the sender
-      setUnreadCounts((prevCounts) => ({
-        ...prevCounts,
-        [data.sender.id]: (prevCounts[data.sender.id] || 0) + 1,
-      }));
-    });
+        // Update unread count for the sender
+        setUnreadCounts((prevCounts) => ({
+          ...prevCounts,
+          [data.sender.id]: (prevCounts[data.sender.id] || 0) + 1,
+        }));
+      }
+    );
 
     return () => {
       pusher.unsubscribe(`private-user-${currentUser.id}`);
@@ -256,7 +272,7 @@ const ChatInterface = () => {
               ...(prevMessages[selectedContact.id] || []),
               {
                 id: Date.now(),
-                sender: currentUser.username,
+                sender: currentUser.displayName,
                 content: message,
                 timestamp: new Date().toLocaleTimeString(),
                 isSent: true,
@@ -288,13 +304,15 @@ const ChatInterface = () => {
               <div className="p-4 border-b flex items-center gap-3 bg-white rounded-lg">
                 <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
                   <span className="text-blue-600 font-semibold">
-                    {selectedContact.username.substring(0, 2).toUpperCase()}
+                    {selectedContact.displayName.substring(0, 2).toUpperCase()}
                   </span>
                 </div>
                 <div>
-                  <h2 className="font-semibold">{selectedContact.username}</h2>
+                  <h2 className="font-semibold">
+                    {selectedContact.displayName}
+                  </h2>
                   <span className="text-xs text-gray-500">
-                    {selectedContact.email}
+                    {selectedContact.mail || selectedContact.userPrincipalName}
                   </span>
                 </div>
               </div>

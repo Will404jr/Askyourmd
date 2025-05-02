@@ -17,6 +17,25 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// Create a custom fetch function that ignores SSL certificate errors
+const fetchWithoutCertValidation = async (
+  url: string,
+  options?: RequestInit
+) => {
+  // In Node.js environment, we need to configure the fetch to ignore SSL errors
+  const { Agent } = await import("https");
+
+  const httpsAgent = new Agent({
+    rejectUnauthorized: false, // Ignore SSL certificate errors
+  });
+
+  return fetch(url, {
+    ...options,
+    // @ts-ignore - The agent property exists but might not be in the types
+    agent: httpsAgent,
+  });
+};
+
 // Test SMTP connection function
 async function testSmtpConnection() {
   try {
@@ -85,7 +104,7 @@ export async function PUT(
       const assigneeUrl = `${baseUrl}/api/users/${assignedTo}`;
       console.log(`🔍 Fetching assignee details from: ${assigneeUrl}`);
 
-      const assigneeResponse = await fetch(assigneeUrl);
+      const assigneeResponse = await fetchWithoutCertValidation(assigneeUrl);
       console.log(
         `📊 Assignee API response status: ${assigneeResponse.status}`
       );
@@ -144,13 +163,14 @@ export async function PUT(
             console.log(`✅ Email sent to assignee: ${JSON.stringify(info)}`);
             console.log(`📧 Message ID: ${info.messageId}`);
             console.log(`📧 Response: ${info.response}`);
-          } catch (error) {
-            const sendError = error as Error;
+          } catch (sendError) {
             console.error(
               `❌ Failed to send email to assignee: ${assignee.mail}`
             );
             console.error(`❌ Error details:`, sendError);
-            console.error(`❌ Stack trace:`, sendError.stack);
+            if (sendError instanceof Error) {
+              console.error(`❌ Stack trace:`, sendError.stack);
+            }
           }
         } else {
           console.warn(
@@ -167,7 +187,9 @@ export async function PUT(
           const submitterUrl = `${baseUrl}/api/users/${issue.submittedBy}`;
           console.log(`🔍 Fetching submitter details from: ${submitterUrl}`);
 
-          const submitterResponse = await fetch(submitterUrl);
+          const submitterResponse = await fetchWithoutCertValidation(
+            submitterUrl
+          );
           console.log(
             `📊 Submitter API response status: ${submitterResponse.status}`
           );
@@ -229,13 +251,14 @@ export async function PUT(
                 );
                 console.log(`📧 Message ID: ${info.messageId}`);
                 console.log(`📧 Response: ${info.response}`);
-              } catch (error) {
-                const sendError = error as Error;
+              } catch (sendError) {
                 console.error(
                   `❌ Failed to send email to submitter: ${submitter.mail}`
                 );
                 console.error(`❌ Error details:`, sendError);
-                console.error(`❌ Stack trace:`, sendError.stack);
+                if (sendError instanceof Error) {
+                  console.error(`❌ Stack trace:`, sendError.stack);
+                }
               }
             } else {
               console.warn(
@@ -263,17 +286,20 @@ export async function PUT(
       }
     } catch (emailError) {
       // Log email errors but don't fail the request
-      const error = emailError as Error;
-      console.error("❌ Error sending notification emails:", error);
-      console.error("❌ Error stack:", error.stack);
-      console.error("❌ Error details:", JSON.stringify(error, null, 2));
+      console.error("❌ Error sending notification emails:", emailError);
+      if (emailError instanceof Error) {
+        console.error("❌ Error stack:", emailError.stack);
+      }
+      console.error("❌ Error details:", JSON.stringify(emailError, null, 2));
     }
 
     console.log(`✅ Assignment process completed for issue: ${id}`);
     return NextResponse.json(updatedIssue);
   } catch (error) {
     console.error("❌ Error updating issue:", error);
-    console.error("❌ Error stack:", (error as Error).stack);
+    if (error instanceof Error) {
+      console.error("❌ Error stack:", error.stack);
+    }
 
     if (error instanceof mongoose.Error.ValidationError) {
       console.error(

@@ -106,13 +106,13 @@ export async function GET(req: NextRequest) {
     const filterByDepartment = searchParams.get("department");
     const filterByName = searchParams.get("name");
 
-    console.log("Fetching access token...");
+    // console.log("Fetching access token...");
     const accessToken = await getAccessToken();
 
-    console.log("Fetching users from Azure AD...");
+    // console.log("Fetching users from Azure AD...");
     const users = await fetchUsers(accessToken);
 
-    console.log(`Fetched ${users.length} users from Azure AD`);
+    // console.log(`Fetched ${users.length} users from Azure AD`);
 
     // Apply filters if provided
     let filteredUsers = users;
