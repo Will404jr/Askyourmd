@@ -9,22 +9,18 @@ import { Send, Search, Users, X, ArrowLeft } from "lucide-react";
 import Pusher from "pusher-js";
 import { useRouter } from "next/navigation";
 
-// Define user interfaces based on the new structure
-interface AdminUser {
+// Define user interfaces based on Azure AD
+interface AzureADUser {
   id: string;
-  username: string;
-  email: string;
-  personnelType: "Md";
+  displayName: string;
+  givenName?: string;
+  surname?: string;
+  mail?: string;
+  userPrincipalName: string;
+  jobTitle?: string;
+  department?: string;
+  personnelType?: string;
 }
-
-interface StaffUser {
-  id: string; // This will be the uid from LDAP
-  username: string; // This will be the cn from LDAP
-  email: string; // This will be the mail from LDAP
-  personnelType: "Staff";
-}
-
-type User = AdminUser | StaffUser;
 
 interface UnreadCount {
   _id: string;
@@ -40,10 +36,12 @@ interface MessagePreview {
 
 const ChatInterface = () => {
   const [message, setMessage] = useState("");
-  const [selectedContact, setSelectedContact] = useState<User | null>(null);
+  const [selectedContact, setSelectedContact] = useState<AzureADUser | null>(
+    null
+  );
   const [searchQuery, setSearchQuery] = useState("");
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
+  const [currentUser, setCurrentUser] = useState<AzureADUser | null>(null);
+  const [staffUsers, setStaffUsers] = useState<AzureADUser[]>([]);
   const [showSidebar, setShowSidebar] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [messages, setMessages] = useState<{
@@ -103,37 +101,76 @@ const ChatInterface = () => {
     const fetchSession = async () => {
       const response = await fetch("/api/session");
       const session = await response.json();
-      if (session.isLoggedIn && session.username) {
-        // Create user object from session data
-        const user: User = {
-          id: session.id,
-          username: session.username,
-          email: session.email,
-          personnelType: session.personnelType,
-        };
-        setCurrentUser(user);
+      if (session.isLoggedIn) {
+        // Check if this is the admin user
+        if (session.personnelType === "Md") {
+          // Fetch the admin user details
+          const adminResponse = await fetch("/api/admin-user");
+          if (adminResponse.ok) {
+            const admin = await adminResponse.json();
+            setCurrentUser({
+              id: admin.id,
+              displayName: admin.username,
+              mail: admin.email,
+              userPrincipalName: admin.email,
+              personnelType: "Md",
+            });
+          } else {
+            // Fallback to session data
+            setCurrentUser({
+              id: session.id,
+              displayName: session.username || session.givenName || "Admin",
+              givenName: session.givenName,
+              surname: session.surname,
+              mail: session.email,
+              userPrincipalName: session.userPrincipalName || session.email,
+              personnelType: session.personnelType,
+            });
+          }
+        } else {
+          // Regular staff user
+          setCurrentUser({
+            id: session.id,
+            displayName: session.username || session.givenName || "User",
+            givenName: session.givenName,
+            surname: session.surname,
+            mail: session.email,
+            userPrincipalName: session.userPrincipalName || session.email,
+            personnelType: session.personnelType,
+          });
+        }
       } else {
-        router.push("/login");
+        router.push("/");
       }
     };
     fetchSession();
   }, [router]);
 
-  // Fetch staff users from LDAP
+  // Fetch staff users from Azure AD
   useEffect(() => {
     const fetchStaffUsers = async () => {
       if (currentUser?.personnelType === "Md") {
         try {
           const response = await fetch("/api/users");
           if (response.ok) {
-            const ldapUsers = await response.json();
-            // Map LDAP users to our StaffUser interface
-            const mappedUsers: StaffUser[] = ldapUsers.map((user: any) => ({
-              id: user.uid,
-              username: user.cn,
-              email: user.mail || `${user.uid}@example.com`,
-              personnelType: "Staff",
-            }));
+            const data = await response.json();
+            const users = data.users || [];
+
+            // Map Azure AD users to our interface
+            const mappedUsers: AzureADUser[] = users
+              .filter((user: AzureADUser) => user.id !== currentUser.id) // Exclude current user
+              .map((user: AzureADUser) => ({
+                id: user.id,
+                displayName: user.displayName,
+                givenName: user.givenName,
+                surname: user.surname,
+                mail: user.mail,
+                userPrincipalName: user.userPrincipalName,
+                jobTitle: user.jobTitle,
+                department: user.department,
+                personnelType: "Staff", // Assume all users except MD are staff
+              }));
+
             setStaffUsers(mappedUsers);
           }
         } catch (error) {
@@ -179,7 +216,7 @@ const ChatInterface = () => {
           }
         } catch (error) {
           console.error(
-            `Error fetching last message for ${staffUser.username}:`,
+            `Error fetching last message for ${staffUser.displayName}:`,
             error
           );
         }
@@ -227,8 +264,8 @@ const ChatInterface = () => {
                 id: msg._id,
                 sender:
                   msg.senderId === currentUser.id
-                    ? currentUser.username
-                    : selectedContact.username,
+                    ? currentUser.displayName
+                    : selectedContact.displayName,
                 content: msg.message,
                 timestamp: new Date(msg.timestamp).toLocaleTimeString(),
                 isSent: msg.senderId === currentUser.id,
@@ -267,44 +304,47 @@ const ChatInterface = () => {
     });
 
     const channel = pusher.subscribe(`private-user-${currentUser.id}`);
-    channel.bind("new-message", (data: { sender: User; message: string }) => {
-      setMessages((prevMessages) => {
-        const newMessage = {
-          id: Date.now(),
-          sender: data.sender.username,
-          content: data.message,
-          timestamp: new Date().toLocaleTimeString(),
-          isSent: false,
-        };
-
-        const updatedMessages = {
-          ...prevMessages,
-          [data.sender.id]: [
-            ...(prevMessages[data.sender.id] || []),
-            newMessage,
-          ],
-        };
-
-        // Update message preview for this contact
-        setMessagePreviews((prev) => ({
-          ...prev,
-          [data.sender.id]: {
+    channel.bind(
+      "new-message",
+      (data: { sender: AzureADUser; message: string }) => {
+        setMessages((prevMessages) => {
+          const newMessage = {
+            id: Date.now(),
+            sender: data.sender.displayName,
             content: data.message,
             timestamp: new Date().toLocaleTimeString(),
-            rawTimestamp: new Date(),
-            isRead: false,
-          },
+            isSent: false,
+          };
+
+          const updatedMessages = {
+            ...prevMessages,
+            [data.sender.id]: [
+              ...(prevMessages[data.sender.id] || []),
+              newMessage,
+            ],
+          };
+
+          // Update message preview for this contact
+          setMessagePreviews((prev) => ({
+            ...prev,
+            [data.sender.id]: {
+              content: data.message,
+              timestamp: new Date().toLocaleTimeString(),
+              rawTimestamp: new Date(),
+              isRead: false,
+            },
+          }));
+
+          return updatedMessages;
+        });
+
+        // Update unread count for the sender
+        setUnreadCounts((prevCounts) => ({
+          ...prevCounts,
+          [data.sender.id]: (prevCounts[data.sender.id] || 0) + 1,
         }));
-
-        return updatedMessages;
-      });
-
-      // Update unread count for the sender
-      setUnreadCounts((prevCounts) => ({
-        ...prevCounts,
-        [data.sender.id]: (prevCounts[data.sender.id] || 0) + 1,
-      }));
-    });
+      }
+    );
 
     return () => {
       pusher.unsubscribe(`private-user-${currentUser.id}`);
@@ -343,7 +383,7 @@ const ChatInterface = () => {
     .filter(
       (user) =>
         user.id !== currentUser?.id &&
-        user.username.toLowerCase().includes(searchQuery.toLowerCase())
+        user.displayName.toLowerCase().includes(searchQuery.toLowerCase())
     )
     .sort((a, b) => {
       // Sort by message timestamp (newest first)
@@ -380,7 +420,7 @@ const ChatInterface = () => {
 
         const newMessageObj = {
           id: Date.now(),
-          sender: currentUser.username,
+          sender: currentUser.displayName,
           content: message,
           timestamp: new Date().toLocaleTimeString(),
           isSent: true,
@@ -414,7 +454,7 @@ const ChatInterface = () => {
     }
   };
 
-  const handleContactSelect = (contact: User) => {
+  const handleContactSelect = (contact: AzureADUser) => {
     setSelectedContact(contact);
 
     // Mark messages as read when selecting a contact
@@ -517,12 +557,14 @@ const ChatInterface = () => {
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
                             <span className="text-blue-600 font-semibold">
-                              {contact.username.substring(0, 2).toUpperCase()}
+                              {contact.displayName
+                                .substring(0, 2)
+                                .toUpperCase()}
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
                             <h3 className="font-semibold truncate">
-                              {contact.username}
+                              {contact.displayName}
                             </h3>
                             <p
                               className={`text-sm truncate ${
@@ -574,15 +616,18 @@ const ChatInterface = () => {
                   )}
                   <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
                     <span className="text-blue-600 font-semibold">
-                      {selectedContact.username.substring(0, 2).toUpperCase()}
+                      {selectedContact.displayName
+                        .substring(0, 2)
+                        .toUpperCase()}
                     </span>
                   </div>
                   <div>
                     <h2 className="font-semibold">
-                      {selectedContact.username}
+                      {selectedContact.displayName}
                     </h2>
                     <span className="text-xs text-gray-500">
-                      {selectedContact.email}
+                      {selectedContact.mail ||
+                        selectedContact.userPrincipalName}
                     </span>
                   </div>
                 </div>

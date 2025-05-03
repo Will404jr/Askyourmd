@@ -7,6 +7,9 @@ const AZURE_AD_TENANT_ID =
 const AZURE_AD_CLIENT_ID = process.env.AZURE_AD_CLIENT_ID;
 const AZURE_AD_CLIENT_SECRET = process.env.AZURE_AD_CLIENT_SECRET;
 
+// Whitelist of email addresses that should have admin privileges
+const ADMIN_EMAILS = ["payota@nssfug.org", "mathieno@nssfug.org"];
+
 // Helper function to get the base URL from request headers
 const getBaseUrlFromRequest = (req: NextRequest) => {
   const host =
@@ -92,19 +95,40 @@ export async function POST(req: NextRequest) {
 
     console.log("User authenticated:", userData.name);
 
+    // Get user email
+    const userEmail = userData.email || userData.preferred_username || "";
+    console.log("User email:", userEmail);
+
+    // Check if the user is in the admin whitelist
+    const isWhitelistedAdmin = ADMIN_EMAILS.includes(userEmail.toLowerCase());
+    console.log("Is whitelisted admin:", isWhitelistedAdmin);
+
     // Create session
     const session = await getSession();
 
     // Set session data
-    session.id = userData.oid || userData.sub;
-    session.isLoggedIn = true;
-    session.username = userData.given_name || userData.name;
-    session.email = userData.email || userData.preferred_username;
-    session.givenName = userData.given_name || "";
-    session.surname = userData.family_name || "";
-    session.userPrincipalName = userData.preferred_username || userData.email;
-    session.personnelType = "Staff";
-    session.expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+    if (isWhitelistedAdmin) {
+      // Use exact admin session values for whitelisted users
+      session.id = "admin";
+      session.isLoggedIn = true;
+      session.username = "Admin";
+      session.email = "admin@nssfug.org";
+      session.personnelType = "Md";
+      session.expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+
+      console.log("Whitelisted user detected. Setting admin session values.");
+    } else {
+      // Regular staff user
+      session.id = userData.oid || userData.sub;
+      session.isLoggedIn = true;
+      session.username = userData.given_name || userData.name;
+      session.email = userEmail;
+      session.givenName = userData.given_name || "";
+      session.surname = userData.family_name || "";
+      session.userPrincipalName = userData.preferred_username || userData.email;
+      session.personnelType = "Staff";
+      session.expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+    }
 
     console.log("Session before save:", {
       id: session.id,
@@ -123,7 +147,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Clear auth cookies
-    const response = NextResponse.redirect(`${baseUrl}/Staff/home`);
+    const redirectPath = isWhitelistedAdmin ? "/MD/home" : "/staff/home";
+    const response = NextResponse.redirect(`${baseUrl}${redirectPath}`);
     response.cookies.delete("auth_nonce");
     response.cookies.delete("auth_state");
 

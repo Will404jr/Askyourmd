@@ -3,27 +3,22 @@ import Pusher from "pusher";
 import { getSession } from "@/lib/session";
 import dbConnect from "@/lib/db";
 import { Message } from "@/lib/models/Message";
-import { users as adminUsers } from "@/lib/admin";
+import { users } from "@/lib/adminlogin";
 
 // Define user interfaces
-interface AdminUser {
+interface AzureADUser {
   id: string;
-  username: string;
-  email: string;
-  personnelType: "Md";
+  displayName: string;
+  givenName?: string;
+  surname?: string;
+  mail?: string;
+  userPrincipalName: string;
+  jobTitle?: string;
+  department?: string;
+  personnelType?: string;
 }
 
-interface StaffUser {
-  id: string;
-  username: string;
-  email: string;
-  personnelType: "Staff";
-}
-
-type User = AdminUser | StaffUser | null;
-
-// Flask API configuration
-const FLASK_USERS_URL = "http://localhost:5000/users"; // Update to your Flask server URL
+type User = AzureADUser | null;
 
 const pusher = new Pusher({
   appId: process.env.PUSHER_APP_ID!,
@@ -33,42 +28,43 @@ const pusher = new Pusher({
   useTLS: true,
 });
 
-// Helper function to get user by ID
+// Helper function to get user by ID from Azure AD or admin list
 async function getUserById(userId: string): Promise<User> {
-  // Check if user is an admin
-  const adminUser = adminUsers.find((u) => u.id === userId);
-  if (adminUser) {
+  // Check if this is the admin user
+  if (userId === "admin") {
+    const adminUser = users[0];
     return {
       id: adminUser.id,
-      username: adminUser.username,
-      email: adminUser.email,
+      displayName: adminUser.username,
+      mail: adminUser.email,
+      userPrincipalName: adminUser.email,
       personnelType: "Md",
     };
   }
 
-  // If not admin, fetch users from Flask API
   try {
-    const response = await fetch(FLASK_USERS_URL);
+    // Fetch user from Azure AD API
+    const response = await fetch(
+      `${
+        process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
+      }/api/users`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ userId }),
+      }
+    );
+
     if (!response.ok) {
-      throw new Error(`Flask API responded with status ${response.status}`);
-    }
-    const users: { uid: string; mail?: string; cn: string }[] =
-      await response.json();
-
-    // Find user by uid (used as id)
-    const user = users.find((u) => u.uid === userId);
-    if (!user) {
-      return null;
+      throw new Error(`Failed to fetch user: ${response.status}`);
     }
 
-    return {
-      id: user.uid,
-      username: user.cn || user.uid, // Use cn as username, fallback to uid
-      email: user.mail || `${user.uid}@example.com`, // Fallback email
-      personnelType: "Staff",
-    };
+    const data = await response.json();
+    return data.user;
   } catch (error) {
-    console.error("Error fetching user from Flask API:", error);
+    console.error("Error fetching user from Azure AD:", error);
     return null;
   }
 }
@@ -112,7 +108,10 @@ export async function POST(req: Request) {
     }
 
     // Check if the communication is allowed (Staff to MD or MD to anyone)
-    if (sender.personnelType !== "Md" && recipient.personnelType !== "Md") {
+    const isMd = session.personnelType === "Md" || senderId === "admin";
+    const recipientIsMd = recipientId === "admin";
+
+    if (!isMd && !recipientIsMd) {
       return NextResponse.json(
         { error: "Communication not allowed" },
         { status: 403 }
@@ -143,7 +142,12 @@ export async function POST(req: Request) {
 
     try {
       await pusher.trigger(`private-user-${recipientId}`, "new-message", {
-        sender,
+        sender: {
+          id: sender.id,
+          username: sender.displayName,
+          email: sender.mail || sender.userPrincipalName,
+          personnelType: isMd ? "Md" : "Staff",
+        },
         message: messageContent,
       });
     } catch (error) {

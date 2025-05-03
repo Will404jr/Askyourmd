@@ -94,27 +94,16 @@ const ChatInterface = () => {
   useEffect(() => {
     const fetchAdminUser = async () => {
       try {
-        // Find an admin user from the users API
-        const response = await fetch("/api/users");
+        const response = await fetch("/api/admin-user");
         if (response.ok) {
-          const data = await response.json();
-          const users = data.users || [];
-
-          // Look for a user with Management department or Managing Director job title
-          const admin = users.find(
-            (user: AzureADUser) =>
-              user.department === "Management" ||
-              user.jobTitle === "Managing Director"
-          );
-
-          if (admin) {
-            setAdminUser({
-              ...admin,
-              personnelType: "Md",
-            });
-          } else {
-            console.warn("No admin user found in Azure AD users");
-          }
+          const admin = await response.json();
+          setAdminUser({
+            id: admin.id,
+            displayName: admin.username,
+            mail: admin.email,
+            userPrincipalName: admin.email,
+            personnelType: "Md",
+          });
         }
       } catch (error) {
         console.error("Error fetching admin user:", error);
