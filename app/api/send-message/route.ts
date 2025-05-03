@@ -44,18 +44,13 @@ async function getUserById(userId: string): Promise<User> {
 
   try {
     // Fetch user from Azure AD API
-    const response = await fetch(
-      `${
-        process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
-      }/api/users`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ userId }),
-      }
-    );
+    const response = await fetch("http://localhost:3001/api/users", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ userId }),
+    });
 
     if (!response.ok) {
       throw new Error(`Failed to fetch user: ${response.status}`);

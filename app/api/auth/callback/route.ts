@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Clear auth cookies
-    const redirectPath = isWhitelistedAdmin ? "/MD/home" : "/staff/home";
+    const redirectPath = isWhitelistedAdmin ? "/home" : "/home";
     const response = NextResponse.redirect(`${baseUrl}${redirectPath}`);
     response.cookies.delete("auth_nonce");
     response.cookies.delete("auth_state");
