@@ -5,6 +5,7 @@ import { getSession } from "./lib/session";
 // Paths that don't require authentication
 const publicPaths = [
   "/",
+  "/home",
   "/api/login",
   "/api/users",
   "/api/auth/login",
