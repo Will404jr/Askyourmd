@@ -19,7 +19,7 @@ export default function HomePage() {
           if (data.personnelType === "Md") {
             router.push("/MD/home");
           } else if (data.personnelType === "Staff") {
-            router.push("/Staff/home");
+            router.push("/staff/home");
           } else {
             // Unknown user type, redirect to login
             router.push("/");
