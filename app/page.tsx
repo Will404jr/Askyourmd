@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Image from "next/image";
 import Logo from "@/public/imgs/logo.png";
-import Marketing from "@/public/imgs/marketing.jpeg";
+import Marketing from "@/public/imgs/patrick_ayota.jpg";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
