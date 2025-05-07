@@ -287,7 +287,7 @@ const ChatInterface = () => {
   return (
     <main className="container mx-auto px-4 py-2">
       <div className="max-w-6xl mx-auto p-6">
-        <Card className="h-[600px] flex bg-white shadow-lg">
+        <Card className="h-[calc(100vh-120px)] max-h-[600px] min-h-[400px] flex bg-white shadow-lg">
           <div className="flex-1 flex flex-col rounded-lg">
             {selectedContact && (
               <div className="p-4 border-b flex items-center gap-3 bg-white rounded-lg">
@@ -307,7 +307,7 @@ const ChatInterface = () => {
               </div>
             )}
 
-            <ScrollArea className="flex-1" ref={scrollAreaRef}>
+            <ScrollArea className="flex-1 overflow-y-auto" ref={scrollAreaRef}>
               <div className="h-full p-4">
                 <div className="space-y-4">
                   {selectedContact &&
@@ -340,7 +340,7 @@ const ChatInterface = () => {
               </div>
             </ScrollArea>
 
-            <div className="p-4 border-t bg-gray-50 rounded-lg">
+            <div className="p-4 border-t bg-gray-50 rounded-lg sticky bottom-0 z-10">
               <div className="flex gap-2">
                 <Input
                   value={message}
